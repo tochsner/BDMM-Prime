@@ -182,7 +182,6 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
 
     @Override
     public double calculateTreeLogLikelihood(TreeInterface dummyTree) {
-
         if (tree.getLeafNodeCount() != originalLeafCount)
             initAndValidate();
 
@@ -213,6 +212,15 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
             return logP;
         }
 
+        // TODO: change to new implementation
+        // Do we want to have a choice?
+        // => we could let the user parameterize the solver
+        // (it could make sense to separate system from solver?)
+
+        // also: how often is calculateTreeLogLikelihood called (once per parameter set?)
+        // flow is only dependent on parameters and not on tree, we might to unnecessary
+        // computations
+
         P0GeSystem system = new P0GeSystem(parameterization,
                 absoluteToleranceInput.get(), relativeToleranceInput.get());
 
@@ -226,7 +234,7 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
 
             int intervalIndex = parameterization.getIntervalIndex(0);
             for (int type1=0; type1<parameterization.getNTypes(); type1++) {
-                for (int type2=0; type2<parameterization.getNTypes(); type2++) {
+                for (   int type2=0; type2<parameterization.getNTypes(); type2++) {
                     double rate = type1 == type2
                             ? parameterization.getBirthRates()[intervalIndex][type1]
                             : parameterization.getCrossBirthRates()[intervalIndex][type1][type2];
@@ -674,7 +682,7 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
     /**
      * Perform integration on differential equations p
      */
-    private void integrateP0(double tStart, double tEnd, P0State state, P0System system) {
+    protected void integrateP0(double tStart, double tEnd, P0State state, P0System system) {
 
         double thisTime = tStart;
         int thisInterval = parameterization.getIntervalIndex(thisTime);
