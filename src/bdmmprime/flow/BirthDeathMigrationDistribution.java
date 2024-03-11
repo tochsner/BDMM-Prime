@@ -8,12 +8,16 @@ import beast.base.evolution.speciation.SpeciesTreeDistribution;
 import beast.base.evolution.tree.Node;
 import beast.base.evolution.tree.TreeInterface;
 import beast.base.inference.parameter.RealParameter;
+import org.apache.commons.math3.linear.DecompositionSolver;
+import org.apache.commons.math3.linear.QRDecomposition;
 import org.apache.commons.math3.ode.ContinuousOutputModel;
 import org.apache.commons.math3.ode.FirstOrderDifferentialEquations;
 import org.apache.commons.math3.ode.FirstOrderIntegrator;
 import org.apache.commons.math3.ode.ODEIntegrator;
 import org.apache.commons.math3.ode.nonstiff.DormandPrince54Integrator;
 import org.apache.commons.math3.ode.sampling.StepInterpolator;
+
+import java.util.Arrays;
 
 public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
 
@@ -77,9 +81,10 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
 
     @Override
     public double calculateTreeLogLikelihood(TreeInterface dummyTree) {
-        StepInterpolator flow = this.calculateFlow();
+        ContinuousOutputModel flow = this.calculateFlow();
 
-        double[] rootLikelihoodPerState = this.calculateSubTreeLikelihood(flow);
+        Node root = this.tree.getRoot();
+        double[] rootLikelihoodPerState = this.calculateSubTreeLikelihood(root, flow);
 
         double treeLikelihood = rootLikelihoodPerState[0];
 
@@ -100,9 +105,12 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
         ContinuousOutputModel flow = new ContinuousOutputModel();
         flowIntegrator.addStepHandler(flow);
 
-        // run integration to calculate the flow
+        // run integration over the entire timespan (all the intervals) to calculate the flow
 
         double[] intervalEndTimes = this.parameterization.getIntervalEndTimes();
+
+        // TODO: initial state?
+        double[] state = new double[]{};
 
         for (int interval = 0; interval < this.parameterization.getTotalIntervalCount(); interval++) {
             flowODE.setInterval(interval);
@@ -110,15 +118,74 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
             double startTime = interval == 0 ? 0 : intervalEndTimes[interval - 1];
             double endTime = intervalEndTimes[interval];
 
-            double[] initialState = new double[] {};
-            double[] endState = new double[] {};
-
-            flowIntegrator.integrate(flowODE, startTime, initialState, endTime, endState);
+            flowIntegrator.integrate(flowODE, startTime, state, endTime, state);
         }
 
         return flow;
     }
-    private double[] calculateSubTreeLikelihood(StepInterpolator flow) {
-        return new double[] {0.0};
+
+    private double[] calculateSubTreeLikelihood(Node root, double timeEdgeStart, double timeEdgeEnd, ContinuousOutputModel flow) {
+        if (root.isFake()) {
+            return new double[]{};
+        }
+
+        if (root.isLeaf()) {
+            return new double[]{};
+        }
+
+        // normal edge
+
+        Node child1 = root.getChild(0);
+        double[] likelihoodChild1 = this.calculateSubTreeLikelihood(
+                child1,
+                timeEdgeEnd,
+                this.parameterization.getNodeTime(child1, this.finalSampleOffset),
+                flow
+        );
+
+        Node child2 = root.getChild(1);
+        double[] likelihoodChild2 = this.calculateSubTreeLikelihood(
+                child2,
+                timeEdgeEnd,
+                this.parameterization.getNodeTime(child1, this.finalSampleOffset),
+                flow
+        );
+
+        // combine the child likelihoods to get the likelihood at the edge end
+
+        double[] likelihoodEdgeEnd = new double[this.parameterization.getNTypes()];
+
+        int intervalEdgeEnd = this.parameterization.getIntervalIndex(timeEdgeEnd);
+        double[] birthRatesEdgeEnd = this.parameterization.getBirthRates()[intervalEdgeEnd];
+
+        for (int i = 0; i < this.parameterization.getNTypes(); i++) {
+            likelihoodEdgeEnd[i] = likelihoodChild1[i];
+
+            for (int j = 0; j < parameterization.getNTypes(); j++) {
+                likelihoodEdgeEnd[i + this.parameterization.getNTypes()] += (
+                        birthRatesEdgeEnd[i]
+                                * likelihoodChild1[i + this.parameterization.getNTypes()]
+                                * likelihoodChild2[j + this.parameterization.getNTypes()]
+                );
+                likelihoodEdgeEnd[i + this.parameterization.getNTypes()] += (
+                        birthRatesEdgeEnd[i]
+                                * likelihoodChild1[j + this.parameterization.getNTypes()]
+                                * likelihoodChild2[i + this.parameterization.getNTypes()]
+                );
+            }
+        }
+
+        double[] likelihoodEdgeStart;
+
+        DecompositionSolver linearSolver = new QRDecomposition()
+
+        flow.setInterpolatedTime(timeEdgeStart);
+        double[] flowEdgeStart = flow.getInterpolatedState();
+
+        flow.setInterpolatedTime(timeEdgeEnd);
+        double[] flowEdgeEnd = flow.getInterpolatedState();
+
+
+        return new double[]{};
     }
 }
