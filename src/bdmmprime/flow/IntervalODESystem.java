@@ -20,7 +20,7 @@ public abstract class IntervalODESystem implements FirstOrderDifferentialEquatio
         this.interval = interval;
     }
 
-    public ContinuousOutputModel integrateOverIntegrals(double absoluteTolerance, double relativeTolerance) {
+    public ContinuousOutputModel integrateOverIntegrals(double[] state, double absoluteTolerance, double relativeTolerance) {
         double integrationMinStep = this.param.getTotalProcessLength() * 1e-100;
         double integrationMaxStep = this.param.getTotalProcessLength() / 10;
         FirstOrderIntegrator integrator = new DormandPrince54Integrator(
@@ -34,14 +34,37 @@ public abstract class IntervalODESystem implements FirstOrderDifferentialEquatio
 
         double[] intervalEndTimes = this.param.getIntervalEndTimes();
 
-        // TODO: initial state?
-        double[] state = new double[]{};
-
         for (int interval = 0; interval < this.param.getTotalIntervalCount(); interval++) {
             this.setInterval(interval);
 
             double startTime = interval == 0 ? 0 : intervalEndTimes[interval - 1];
             double endTime = intervalEndTimes[interval];
+
+            integrator.integrate(this, startTime, state, endTime, state);
+        }
+
+        return result;
+    }
+
+    public ContinuousOutputModel integrateBackwardsOverIntegrals(double[] state, double absoluteTolerance, double relativeTolerance) {
+        double integrationMinStep = this.param.getTotalProcessLength() * 1e-100;
+        double integrationMaxStep = this.param.getTotalProcessLength() / 10;
+        FirstOrderIntegrator integrator = new DormandPrince54Integrator(
+                integrationMinStep, integrationMaxStep, absoluteTolerance, relativeTolerance
+        );
+
+        ContinuousOutputModel result = new ContinuousOutputModel();
+        integrator.addStepHandler(result);
+
+        // run integration over the entire timespan (all the intervals) to calculate the flow
+
+        double[] intervalEndTimes = this.param.getIntervalEndTimes();
+
+        for (int interval = this.param.getTotalIntervalCount() - 1; 0 <= interval; interval--) {
+            this.setInterval(interval);
+
+            double startTime = intervalEndTimes[interval];
+            double endTime = interval == 0 ? 0 : intervalEndTimes[interval - 1];
 
             integrator.integrate(this, startTime, state, endTime, state);
         }
