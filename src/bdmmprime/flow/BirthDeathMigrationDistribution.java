@@ -14,8 +14,8 @@ import org.apache.commons.math3.linear.QRDecomposition;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.linear.RealVector;
 import org.apache.commons.math3.ode.ContinuousOutputModel;
-import org.apache.commons.math3.ode.FirstOrderIntegrator;
-import org.apache.commons.math3.ode.nonstiff.DormandPrince54Integrator;
+
+import java.util.Arrays;
 
 public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
 
@@ -112,12 +112,23 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
 
     private ContinuousOutputModel calculateExtinctionProbabilities() {
         IntervalODESystem system = new ExtinctionODESystem(this.parameterization);
-        return system.integrateOverIntegrals(this.absoluteTolerance, this.relativeTolerance);
+
+        double[] initialState = new double[this.parameterization.getNTypes()];
+        Arrays.fill(initialState, 1.0);
+
+        return system.integrateBackwardsOverIntegrals(initialState, this.absoluteTolerance, this.relativeTolerance);
     }
 
     private ContinuousOutputModel calculateFlow(ContinuousOutputModel extinctionProbabilities) {
         FlowODESystem system = new FlowODESystem(this.parameterization, extinctionProbabilities);
-        return system.integrateOverIntegrals(this.absoluteTolerance, this.relativeTolerance);
+
+        double[] initialState = new double[this.parameterization.getNTypes() * this.parameterization.getNTypes()];
+        for (int i = 0; i < this.parameterization.getNTypes(); i++) {
+            // fill diagonal entries with 1 to get the identity matrix
+            initialState[i*this.parameterization.getNTypes() + i] = 1.0;
+        }
+
+        return system.integrateOverIntegrals(initialState, this.absoluteTolerance, this.relativeTolerance);
     }
 
     private double[] calculateSubTreeLikelihood(
