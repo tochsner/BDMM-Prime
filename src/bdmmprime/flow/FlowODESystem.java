@@ -1,75 +1,79 @@
 package bdmmprime.flow;
 
 import bdmmprime.parameterization.Parameterization;
-import org.apache.commons.math3.exception.DimensionMismatchException;
-import org.apache.commons.math3.exception.MaxCountExceededException;
-import org.apache.commons.math3.ode.FirstOrderDifferentialEquations;
+import org.apache.commons.math3.linear.BlockRealMatrix;
+import org.apache.commons.math3.linear.RealMatrix;
+import org.apache.commons.math3.ode.ContinuousOutputModel;
 
-public class FlowODESystem implements FirstOrderDifferentialEquations {
+public class FlowODESystem extends IntervalODESystem {
+    private final ContinuousOutputModel extinctionProbabilities;
 
-    private Parameterization param;
-    private int interval;
-
-    public FlowODESystem(Parameterization parameterization) {
-        this.param = parameterization;
+    public FlowODESystem(Parameterization parameterization, ContinuousOutputModel extinctionProbabilities) {
+        super(parameterization);
+        this.extinctionProbabilities = extinctionProbabilities;
     }
-
-    public void setInterval(int interval) {
-        this.interval = interval;
-    }
-
-
-    /* FirstOrderDifferentialEquations implementation */
 
     @Override
     public int getDimension() {
-        return param.getNTypes()*2;
+        return param.getNTypes() * param.getNTypes();
+    }
+
+    private RealMatrix buildSystemMatrix(double t) {
+        RealMatrix system = new BlockRealMatrix(param.getNTypes(), param.getNTypes());
+
+        int interval = this.param.getIntervalIndex(t);
+
+        this.extinctionProbabilities.setInterpolatedTime(t);
+        double[] extinctProbabilities = this.extinctionProbabilities.getInterpolatedState();
+
+        // fill transitions
+        for (int i = 0; i < param.getNTypes(); i++) {
+            for (int j = 0; j < param.getNTypes(); j++) {
+                if (i == j) continue;
+
+                system.setEntry(
+                        i,
+                        j,
+                        -this.param.getMigRates()[interval][i][j]
+                                - this.param.getCrossBirthRates()[interval][i][j] * extinctProbabilities[i]
+                );
+            }
+        }
+
+        // fill diagonals
+        for (int i = 0; i < param.getNTypes(); i++) {
+            system.setEntry(
+                    i,
+                    i,
+                    this.param.getBirthRates()[interval][i] + this.param.getSamplingRates()[interval][i]
+            );
+
+            for (int j = 0; j < param.getNTypes(); j++) {
+                system.addToEntry(
+                        i,
+                        i,
+                        this.param.getMigRates()[interval][i][j]
+                );
+                system.addToEntry(
+                        i,
+                        i,
+                        this.param.getCrossBirthRates()[interval][i][j]
+                                * (1 - extinctProbabilities[j])
+                );
+            }
+        }
+
+        return system;
     }
 
     @Override
-    public void computeDerivatives(double t, double[] y, double[] yDot)
-            throws MaxCountExceededException, DimensionMismatchException {
+    public void computeDerivatives(double t, double[] y, double[] yDot) {
+        int numTypes = this.param.getNTypes();
 
-        int nTypes = param.getNTypes();
+        RealMatrix yMatrix = Utils.toMatrix(y, numTypes);
+        RealMatrix systemMatrix = this.buildSystemMatrix(t);
 
-        for (int i = 0; i<nTypes; i++){
-
-			/*  p0 equations (0 .. dim-1) */
-
-			yDot[i] = (param.getBirthRates()[interval][i]
-                    + param.getDeathRates()[interval][i]
-                    + param.getSamplingRates()[interval][i]) * y[i]
-					- param.getBirthRates()[interval][i] * y[i] * y[i]
-					- param.getDeathRates()[interval][i];
-
-			for (int j = 0; j < nTypes; j++){
-
-			    if (i==j)
-			        continue;
-
-                yDot[i] += param.getCrossBirthRates()[interval][i][j] * (y[i] - y[i]*y[j]);
-                yDot[i] += param.getMigRates()[interval][i][j] * (y[i] - y[j]);
-			}
-
-			/*  ge equations: (dim .. 2*dim-1) */
-
-			yDot[nTypes + i] = (param.getBirthRates()[interval][i]
-                    + param.getDeathRates()[interval][i]
-                    + param.getSamplingRates()[interval][i])*y[nTypes+i]
-                    - 2*param.getBirthRates()[interval][i]*y[nTypes+i]*y[i];
-
-			for (int j = 0; j< nTypes; j++) {
-
-                if (i==j)
-			        continue;
-
-                yDot[nTypes + i] += param.getCrossBirthRates()[interval][i][j]
-                        * (y[nTypes+i] - (y[nTypes+i]*y[j] + y[nTypes+j]*y[i]));
-
-                yDot[nTypes + i] += param.getMigRates()[interval][i][j]
-                        * (y[nTypes+i] - y[nTypes+j]);
-			}
-		}
-
+        RealMatrix yDotMatrix = yMatrix.multiply(systemMatrix);
+        Utils.fillArray(yDotMatrix, yDot);
     }
 }
