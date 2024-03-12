@@ -28,7 +28,6 @@ public abstract class IntervalODESystem implements FirstOrderDifferentialEquatio
         );
 
         ContinuousOutputModel result = new ContinuousOutputModel();
-        integrator.addStepHandler(result);
 
         // run integration over the entire timespan (all the intervals) to calculate the flow
 
@@ -40,7 +39,13 @@ public abstract class IntervalODESystem implements FirstOrderDifferentialEquatio
             double startTime = interval == 0 ? 0 : intervalEndTimes[interval - 1];
             double endTime = intervalEndTimes[interval];
 
+            ContinuousOutputModel intervalResult = new ContinuousOutputModel();
+            integrator.addStepHandler(intervalResult);
+
             integrator.integrate(this, startTime, state, endTime, state);
+
+            result.append(intervalResult);
+            integrator.clearStepHandlers();
         }
 
         return result;
@@ -54,7 +59,6 @@ public abstract class IntervalODESystem implements FirstOrderDifferentialEquatio
         );
 
         ContinuousOutputModel result = new ContinuousOutputModel();
-        integrator.addStepHandler(result);
 
         // run integration over the entire timespan (all the intervals) to calculate the flow
 
@@ -66,7 +70,13 @@ public abstract class IntervalODESystem implements FirstOrderDifferentialEquatio
             double startTime = intervalEndTimes[interval];
             double endTime = interval == 0 ? 0 : intervalEndTimes[interval - 1];
 
+            ContinuousOutputModel intervalResult = new ContinuousOutputModel();
+            integrator.addStepHandler(intervalResult);
+
             integrator.integrate(this, startTime, state, endTime, state);
+
+            result.append(intervalResult);
+            integrator.clearStepHandlers();
         }
 
         return result;

@@ -34,8 +34,8 @@ public class FlowODESystem extends IntervalODESystem {
                 system.setEntry(
                         i,
                         j,
-                        -this.param.getMigRates()[interval][i][j]
-                                - this.param.getCrossBirthRates()[interval][i][j] * extinctProbabilities[i]
+                        this.param.getMigRates()[interval][i][j]
+                                + this.param.getCrossBirthRates()[interval][i][j] * extinctProbabilities[i]
                 );
             }
         }
@@ -45,20 +45,28 @@ public class FlowODESystem extends IntervalODESystem {
             system.setEntry(
                     i,
                     i,
-                    this.param.getBirthRates()[interval][i] + this.param.getSamplingRates()[interval][i]
+                    -this.param.getDeathRates()[interval][i] - this.param.getSamplingRates()[interval][i]
+            );
+            system.addToEntry(
+                    i,
+                    i,
+                    this.param.getBirthRates()[interval][i]
+                            * (2*extinctProbabilities[i] - 1)
             );
 
             for (int j = 0; j < param.getNTypes(); j++) {
+                if (i == j) continue;
+
                 system.addToEntry(
                         i,
                         i,
-                        this.param.getMigRates()[interval][i][j]
+                        -this.param.getMigRates()[interval][i][j]
                 );
                 system.addToEntry(
                         i,
                         i,
                         this.param.getCrossBirthRates()[interval][i][j]
-                                * (1 - extinctProbabilities[j])
+                                * (extinctProbabilities[j] - 1)
                 );
             }
         }
