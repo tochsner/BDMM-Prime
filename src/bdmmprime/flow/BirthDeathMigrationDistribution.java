@@ -156,13 +156,12 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
             initialState[i * this.parameterization.getNTypes() + i] = 1.0;
         }
 
-        return system.integrateOverIntegrals(initialState, this.absoluteTolerance,
-                this.relativeTolerance);
+        return system.integrateOverIntegrals(initialState, this.absoluteTolerance, this.relativeTolerance);
     }
 
     private double[] calculateSubTreeLikelihood(
             Node root,
-            double timeEdgeTop,
+            double timeEdgeStart,
             double timeEdgeEnd,
             ContinuousOutputModel flow,
             ContinuousOutputModel extinctionProbabilities
@@ -172,10 +171,6 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
         double[] likelihoodEdgeEnd = new double[this.parameterization.getNTypes()];
 
         int intervalEdgeEnd = this.parameterization.getIntervalIndex(timeEdgeEnd);
-
-        if (root.isFake()) {
-            throw new UnsupportedOperationException();
-        }
 
         if (root.isLeaf()) {
 
@@ -189,6 +184,24 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
                             * extinctionProbabilityEdgeEnd[nodeType]
             );
 
+        } else if (root.getChild(0).isDirectAncestor() || root.getChild(1).isDirectAncestor()) {
+            Node child = root.getChild(0).isDirectAncestor() ?
+                    root.getChild(1) : root.getChild(0);
+
+            double[] likelihoodChild = this.calculateSubTreeLikelihood(
+                    child,
+                    timeEdgeEnd,
+                    this.parameterization.getNodeTime(child, this.finalSampleOffset),
+                    flow,
+                    extinctionProbabilities
+            );
+
+            for (int i = 0; i < this.parameterization.getNTypes(); i++) {
+                int nodeType = this.getNodeType(root);
+                likelihoodEdgeEnd[i] = this.parameterization.getSamplingRates()[intervalEdgeEnd][nodeType]
+                        * (1 - this.parameterization.getRemovalProbs()[intervalEdgeEnd][nodeType])
+                        * likelihoodChild[i];
+            }
         } else {    // normal edge
 
             Node child1 = root.getChild(0);
@@ -211,8 +224,6 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
 
             // combine the child likelihoods to get the likelihood at the edge end
 
-            likelihoodEdgeEnd = new double[this.parameterization.getNTypes()];
-
             for (int i = 0; i < this.parameterization.getNTypes(); i++) {
                 likelihoodEdgeEnd[i] += this.parameterization.getBirthRates()[intervalEdgeEnd][i] * (
                         likelihoodChild1[i] * likelihoodChild2[i]
@@ -233,7 +244,7 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
 
         // to integrate over the edge, we solve the linear system
 
-        flow.setInterpolatedTime(timeEdgeTop);
+        flow.setInterpolatedTime(timeEdgeStart);
         double[] flowEdgeStart = flow.getInterpolatedState();
         RealMatrix flowMatrixEdgeStart = Utils.toMatrix(flowEdgeStart, this.parameterization.getNTypes());
 
