@@ -12,8 +12,13 @@ public abstract class IntervalODESystem implements FirstOrderDifferentialEquatio
     protected Parameterization param;
     protected int interval;
 
+    private final double integrationMinStep;
+    private final double integrationMaxStep;
+
     public IntervalODESystem(Parameterization parameterization) {
         this.param = parameterization;
+        this.integrationMinStep = this.param.getTotalProcessLength() * 1e-100;
+        this.integrationMaxStep = this.param.getTotalProcessLength() / 10;
     }
 
     protected void setInterval(int interval) {
@@ -21,15 +26,11 @@ public abstract class IntervalODESystem implements FirstOrderDifferentialEquatio
     }
 
     public ContinuousOutputModel integrateOverIntegrals(double[] state, double absoluteTolerance, double relativeTolerance) {
-        double integrationMinStep = this.param.getTotalProcessLength() * 1e-100;
-        double integrationMaxStep = this.param.getTotalProcessLength() / 10;
         FirstOrderIntegrator integrator = new DormandPrince54Integrator(
-                integrationMinStep, integrationMaxStep, absoluteTolerance, relativeTolerance
+                this.integrationMinStep, this.integrationMaxStep, absoluteTolerance, relativeTolerance
         );
 
         ContinuousOutputModel result = new ContinuousOutputModel();
-
-        // run integration over the entire timespan (all the intervals) to calculate the flow
 
         double[] intervalEndTimes = this.param.getIntervalEndTimes();
 
@@ -52,15 +53,11 @@ public abstract class IntervalODESystem implements FirstOrderDifferentialEquatio
     }
 
     public ContinuousOutputModel integrateBackwardsOverIntegrals(double[] state, double absoluteTolerance, double relativeTolerance) {
-        double integrationMinStep = this.param.getTotalProcessLength() * 1e-100;
-        double integrationMaxStep = this.param.getTotalProcessLength() / 10;
         FirstOrderIntegrator integrator = new DormandPrince54Integrator(
-                integrationMinStep, integrationMaxStep, absoluteTolerance, relativeTolerance
+                this.integrationMinStep, this.integrationMaxStep, absoluteTolerance, relativeTolerance
         );
 
         ContinuousOutputModel result = new ContinuousOutputModel();
-
-        // run integration over the entire timespan (all the intervals) to calculate the flow
 
         double[] intervalEndTimes = this.param.getIntervalEndTimes();
 
@@ -81,6 +78,5 @@ public abstract class IntervalODESystem implements FirstOrderDifferentialEquatio
 
         return result;
     }
-
 
 }
