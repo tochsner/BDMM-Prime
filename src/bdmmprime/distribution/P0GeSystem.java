@@ -52,7 +52,7 @@ public class P0GeSystem extends P0System {
 
 			/*  ge equations: (dim .. 2*dim-1) */
 
-			yDot[nTypes + i] = + (b[interval][i]+d[interval][i]+s[interval][i]
+			yDot[nTypes + i] = + (b[interval][i]+d[interval][i]+s[interval][i]  // (b + d + s -2*b*p) = d + s + b (1 - 2p)
 					- 2*b[interval][i]*y[i])*y[nTypes + i];
 
 
@@ -61,11 +61,11 @@ public class P0GeSystem extends P0System {
                 if (i==j)
 			        continue;
 
-                yDot[nTypes + i] += b_ij[interval][i][j]*y[nTypes + i];
+                yDot[nTypes + i] += b_ij[interval][i][j]*y[nTypes + i];     // b_ij - b_ij * p_j = (1 - p_j)*p_ij
                 yDot[nTypes + i] -= b_ij[interval][i][j] *
                         (y[i]*y[nTypes + j] + y[j]*y[nTypes + i]);
 
-                yDot[nTypes + i] += M[interval][i][j] * y[nTypes + i];
+                yDot[nTypes + i] += M[interval][i][j] * y[nTypes + i];         // b_ij * p_i - M_ij
                 yDot[nTypes + i] -= M[interval][i][j] * y[nTypes + j];
 			}
 		}

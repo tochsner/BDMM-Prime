@@ -152,8 +152,8 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
 
             int nodeType = this.getNodeType(root);
             likelihoodEdgeEnd[nodeType] = this.parameterization.getSamplingRates()[intervalEdgeEnd][nodeType] * (
-                    this.parameterization.getRhoValues()[intervalEdgeEnd][nodeType]
-                            + (1 - this.parameterization.getRhoValues()[intervalEdgeEnd][nodeType]) * extinctionProbabilityEdgeEnd[nodeType]
+                    this.parameterization.getRemovalProbs()[intervalEdgeEnd][nodeType]
+                            + (1 - this.parameterization.getRemovalProbs()[intervalEdgeEnd][nodeType]) * extinctionProbabilityEdgeEnd[nodeType]
             );
 
         } else {    // normal edge
@@ -180,11 +180,15 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
 
             likelihoodEdgeEnd = new double[this.parameterization.getNTypes()];
 
-            double[][] birthRatesEdgeEnd = this.parameterization.getCrossBirthRates()[intervalEdgeEnd];
-
             for (int i = 0; i < this.parameterization.getNTypes(); i++) {
+                likelihoodEdgeEnd[i] += this.parameterization.getBirthRates()[intervalEdgeEnd][i] * (
+                        likelihoodChild1[i] * likelihoodChild2[i]
+                );
+
                 for (int j = 0; j < parameterization.getNTypes(); j++) {
-                    likelihoodEdgeEnd[i] += birthRatesEdgeEnd[i][j] * (
+                    if (i == j) continue;
+
+                    likelihoodEdgeEnd[i] += 0.5 * this.parameterization.getCrossBirthRates()[intervalEdgeEnd][i][j] * (
                             likelihoodChild1[i] * likelihoodChild2[j] + likelihoodChild1[j] * likelihoodChild2[i]
                     );
                 }
@@ -200,10 +204,14 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
         double[] flowEdgeStart = flow.getInterpolatedState();
         RealMatrix flowMatrixEdgeStart = Utils.toMatrix(flowEdgeStart, this.parameterization.getNTypes());
 
+        flow.setInterpolatedTime(timeEdgeEnd);
+        double[] flowEdgeEnd = flow.getInterpolatedState();
+        RealMatrix flowMatrixEdgeEnd = Utils.toMatrix(flowEdgeEnd, this.parameterization.getNTypes());
+
         DecompositionSolver linearSolver = new QRDecomposition(flowMatrixEdgeStart).getSolver();
         RealVector solution = linearSolver.solve(likelihoodVectorEdgeEnd);
 
-        RealVector likelihoodVectorEdgeStart = flowMatrixEdgeStart.operate(solution);
+        RealVector likelihoodVectorEdgeStart = flowMatrixEdgeEnd.operate(solution);
         return likelihoodVectorEdgeStart.toArray();
     }
 
