@@ -18,10 +18,9 @@ public class ExtinctionODESystem extends IntervalODESystem {
     @Override
     public void computeDerivatives(double t, double[] y, double[] yDot) throws MaxCountExceededException, DimensionMismatchException {
         for (int i = 0; i < this.param.getNTypes(); i++) {
-            yDot[i] = (param.getBirthRates()[interval][i]
-                    + param.getDeathRates()[interval][i]
-                    + param.getSamplingRates()[interval][i])
-                    * y[i];
+            yDot[i] = param.getBirthRates()[interval][i] * y[i];
+            yDot[i] += param.getDeathRates()[interval][i] * y[i];
+            yDot[i] += param.getSamplingRates()[interval][i] * y[i];
 
             yDot[i] -= param.getBirthRates()[interval][i] * y[i] * y[i];
             yDot[i] -= param.getDeathRates()[interval][i];
