@@ -66,7 +66,7 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
     double[] frequencies;
 
     boolean conditionOnRoot;
-    boolean conditionSurvival;
+    boolean conditionOnSurvival;
 
     double absoluteTolerance;
     double relativeTolerance;
@@ -83,7 +83,7 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
         this.typeLabel = this.typeLabelInput.get();
         this.frequencies = this.frequenciesInput.get().getDoubleValues();
         this.conditionOnRoot = this.conditionOnRootInput.get();
-        this.conditionSurvival = this.conditionOnSurvivalInput.get();
+        this.conditionOnSurvival = this.conditionOnSurvivalInput.get();
         this.absoluteTolerance = this.absoluteToleranceInput.get();
         this.relativeTolerance = this.relativeToleranceInput.get();
         this.numTypes = this.parameterization.getNTypes();
@@ -136,6 +136,10 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
             treeLikelihood += rootLikelihoodPerState[i] * this.frequencies[i];
         }
 
+        // consider different ways to condition the tree
+        double conditionDensity = this.calculateConditionDensity(extinctionProbabilities);
+        treeLikelihood /= conditionDensity;
+
         double logTreeLikelihood = Math.log(treeLikelihood);
 
         // convert from oriented to labeled tree likelihood
@@ -144,6 +148,30 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
         logTreeLikelihood += Math.log(2) * internalNodeCount - Gamma.logGamma(tree.getLeafNodeCount() + 1);
 
         return logTreeLikelihood;
+    }
+
+    private double calculateConditionDensity(ContinuousOutputModel extinctionProbabilities) {
+        double conditionDensity = 0.0;
+
+        if (this.conditionOnSurvival) {
+            // we have to get the extinction probabilities at the time of the latest leaf
+            double maxLeafTime = this.parameterization.getNodeTime(this.tree.getNode(0), this.finalSampleOffset);
+
+            for (int i = 0; i < this.tree.getLeafNodeCount(); i++) { // get all leaf times
+                maxLeafTime = Math.max(maxLeafTime, this.parameterization.getNodeTime(this.tree.getNode(i), this.finalSampleOffset));
+            }
+
+            extinctionProbabilities.setInterpolatedTime(0);
+            double[] extinctionAtRoot = extinctionProbabilities.getInterpolatedState();
+
+            for (int type = 0; type < parameterization.getNTypes(); type++) {
+                conditionDensity += this.frequencies[type] * (1 - extinctionAtRoot[type]);
+            }
+        } else {
+            conditionDensity = 1.0;
+        }
+
+        return conditionDensity;
     }
 
     private ContinuousOutputModel calculateExtinctionProbabilities() {
