@@ -38,6 +38,13 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
             "Attribute key used to specify sample trait values in tree."
     );
 
+    public Input<Boolean> conditionOnSurvivalInput = new Input<>("conditionOnSurvival",
+            "Condition on at least one surviving lineage. (Default true.)",
+            true);
+
+    public Input<Boolean> conditionOnRootInput = new Input<>("conditionOnRoot",
+            "Condition on root age, not time of origin.", false);
+
     public Input<Double> relativeToleranceInput = new Input<>(
             "relTolerance",
             "Relative tolerance for numerical integration.",
@@ -58,6 +65,9 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
 
     double[] frequencies;
 
+    boolean conditionOnRoot;
+    boolean conditionSurvival;
+
     double absoluteTolerance;
     double relativeTolerance;
 
@@ -72,6 +82,8 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
         this.tree = this.treeInput.get();
         this.typeLabel = this.typeLabelInput.get();
         this.frequencies = this.frequenciesInput.get().getDoubleValues();
+        this.conditionOnRoot = this.conditionOnRootInput.get();
+        this.conditionSurvival = this.conditionOnSurvivalInput.get();
         this.absoluteTolerance = this.absoluteToleranceInput.get();
         this.relativeTolerance = this.relativeToleranceInput.get();
         this.numTypes = this.parameterization.getNTypes();
@@ -162,83 +174,14 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
             ContinuousOutputModel flow,
             ContinuousOutputModel extinctionProbabilities
     ) {
-        // we first calculate the likelihood of the tree starting at the end of the edge
-
-        double[] likelihoodEdgeEnd = new double[this.parameterization.getNTypes()];
-        double[] extinctionFactor = new double[this.parameterization.getNTypes()];
-        Arrays.fill(extinctionFactor, 1.0);
-
-        int intervalEdgeEnd = this.parameterization.getIntervalIndex(timeEdgeEnd);
+        double[] likelihoodEdgeEnd;
 
         if (root.isLeaf()) {
-
-            extinctionProbabilities.setInterpolatedTime(timeEdgeEnd);
-            double[] extinctionProbabilityEdgeEnd = extinctionProbabilities.getInterpolatedState();
-
-            int nodeType = this.getNodeType(root);
-            likelihoodEdgeEnd[nodeType] = this.parameterization.getSamplingRates()[intervalEdgeEnd][nodeType] * (
-                    this.parameterization.getRemovalProbs()[intervalEdgeEnd][nodeType]
-                            + (1 - this.parameterization.getRemovalProbs()[intervalEdgeEnd][nodeType])
-                            * extinctionProbabilityEdgeEnd[nodeType]
-            );
-
+            likelihoodEdgeEnd = calculateLeafLikelihood(root, timeEdgeEnd, extinctionProbabilities);
         } else if (root.getChild(0).isDirectAncestor() || root.getChild(1).isDirectAncestor()) {
-            Node directAncestor = root.getChild(0).isDirectAncestor() ?
-                    root.getChild(0) : root.getChild(1);
-            Node child = root.getChild(0).isDirectAncestor() ?
-                    root.getChild(1) : root.getChild(0);
-
-            double[] likelihoodChild = this.calculateSubTreeLikelihood(
-                    child,
-                    timeEdgeEnd,
-                    this.parameterization.getNodeTime(child, this.finalSampleOffset),
-                    flow,
-                    extinctionProbabilities
-            );
-
-            int nodeType = this.getNodeType(directAncestor);
-            likelihoodEdgeEnd[nodeType] = this.parameterization.getSamplingRates()[intervalEdgeEnd][nodeType]
-                    * (1 - this.parameterization.getRemovalProbs()[intervalEdgeEnd][nodeType])
-                    * likelihoodChild[nodeType];
-            extinctionFactor[nodeType] = 0.0;
-        } else {    // normal edge
-
-            Node child1 = root.getChild(0);
-            double[] likelihoodChild1 = this.calculateSubTreeLikelihood(
-                    child1,
-                    timeEdgeEnd,
-                    this.parameterization.getNodeTime(child1, this.finalSampleOffset),
-                    flow,
-                    extinctionProbabilities
-            );
-
-            Node child2 = root.getChild(1);
-            double[] likelihoodChild2 = this.calculateSubTreeLikelihood(
-                    child2,
-                    timeEdgeEnd,
-                    this.parameterization.getNodeTime(child2, this.finalSampleOffset),
-                    flow,
-                    extinctionProbabilities
-            );
-
-            // combine the child likelihoods to get the likelihood at the edge end
-
-            for (int i = 0; i < this.parameterization.getNTypes(); i++) {
-                likelihoodEdgeEnd[i] += this.parameterization.getBirthRates()[intervalEdgeEnd][i] * (
-                        likelihoodChild1[i] * likelihoodChild2[i]
-                );
-
-                for (int j = 0; j < parameterization.getNTypes(); j++) {
-                    if (i == j) {
-                        continue;
-                    }
-
-                    likelihoodEdgeEnd[i] += 0.5 * this.parameterization.getCrossBirthRates()[intervalEdgeEnd][i][j] * (
-                            likelihoodChild1[i] * likelihoodChild2[j] + likelihoodChild1[j] * likelihoodChild2[i]
-                    );
-                }
-            }
-
+            likelihoodEdgeEnd = calculateDirectAncestorWithChildLikelihood(root, timeEdgeEnd, flow, extinctionProbabilities);
+        } else {
+            likelihoodEdgeEnd = calculateInternalEdgeLikelihood(root, timeEdgeEnd, flow, extinctionProbabilities);
         }
 
         return FlowODESystem.integrateUsingFlow(
@@ -248,6 +191,109 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
                 flow
         );
     }
+
+    private double[] calculateLeafLikelihood(
+            Node root,
+            double timeEdgeEnd,
+            ContinuousOutputModel extinctionProbabilities
+    ) {
+
+        int intervalEdgeEnd = this.parameterization.getIntervalIndex(timeEdgeEnd);
+
+        extinctionProbabilities.setInterpolatedTime(timeEdgeEnd);
+        double[] extinctionProbabilityEdgeEnd = extinctionProbabilities.getInterpolatedState();
+
+        int nodeType = this.getNodeType(root);
+
+        double[] likelihoodEdgeEnd = new double[this.parameterization.getNTypes()];
+        likelihoodEdgeEnd[nodeType] = this.parameterization.getSamplingRates()[intervalEdgeEnd][nodeType] * (
+                this.parameterization.getRemovalProbs()[intervalEdgeEnd][nodeType]
+                        + (1 - this.parameterization.getRemovalProbs()[intervalEdgeEnd][nodeType])
+                        * extinctionProbabilityEdgeEnd[nodeType]
+        );
+
+        return likelihoodEdgeEnd;
+    }
+
+    private double[] calculateDirectAncestorWithChildLikelihood(
+            Node root,
+            double timeEdgeEnd,
+            ContinuousOutputModel flow,
+            ContinuousOutputModel extinctionProbabilities
+    ) {
+        int intervalEdgeEnd = this.parameterization.getIntervalIndex(timeEdgeEnd);
+
+        Node directAncestor = root.getChild(0).isDirectAncestor() ?
+                root.getChild(0) : root.getChild(1);
+        Node child = root.getChild(0).isDirectAncestor() ?
+                root.getChild(1) : root.getChild(0);
+
+        double[] likelihoodChild = this.calculateSubTreeLikelihood(
+                child,
+                timeEdgeEnd,
+                this.parameterization.getNodeTime(child, this.finalSampleOffset),
+                flow,
+                extinctionProbabilities
+        );
+
+        int nodeType = this.getNodeType(directAncestor);
+
+        double[] likelihoodEdgeEnd = new double[this.parameterization.getNTypes()];
+        likelihoodEdgeEnd[nodeType] = this.parameterization.getSamplingRates()[intervalEdgeEnd][nodeType]
+                * (1 - this.parameterization.getRemovalProbs()[intervalEdgeEnd][nodeType])
+                * likelihoodChild[nodeType];
+
+        return likelihoodEdgeEnd;
+    }
+
+    private double[] calculateInternalEdgeLikelihood(
+            Node root,
+            double timeEdgeEnd,
+            ContinuousOutputModel flow,
+            ContinuousOutputModel extinctionProbabilities
+    ) {
+        int intervalEdgeEnd = this.parameterization.getIntervalIndex(timeEdgeEnd);
+
+        Node child1 = root.getChild(0);
+        double[] likelihoodChild1 = this.calculateSubTreeLikelihood(
+                child1,
+                timeEdgeEnd,
+                this.parameterization.getNodeTime(child1, this.finalSampleOffset),
+                flow,
+                extinctionProbabilities
+        );
+
+        Node child2 = root.getChild(1);
+        double[] likelihoodChild2 = this.calculateSubTreeLikelihood(
+                child2,
+                timeEdgeEnd,
+                this.parameterization.getNodeTime(child2, this.finalSampleOffset),
+                flow,
+                extinctionProbabilities
+        );
+
+        // combine the child likelihoods to get the likelihood at the edge end
+
+        double[] likelihoodEdgeEnd = new double[this.parameterization.getNTypes()];
+        for (int i = 0; i < this.parameterization.getNTypes(); i++) {
+            likelihoodEdgeEnd[i] += this.parameterization.getBirthRates()[intervalEdgeEnd][i] * (
+                    likelihoodChild1[i] * likelihoodChild2[i]
+            );
+
+            for (int j = 0; j < parameterization.getNTypes(); j++) {
+                if (i == j) {
+                    continue;
+                }
+
+                likelihoodEdgeEnd[i] += 0.5 * this.parameterization.getCrossBirthRates()[intervalEdgeEnd][i][j] * (
+                        likelihoodChild1[i] * likelihoodChild2[j] + likelihoodChild1[j] * likelihoodChild2[i]
+                );
+            }
+        }
+
+        return likelihoodEdgeEnd;
+    }
+
 
     private int getNodeType(Node node) {
         if (parameterization.getNTypes() == 1) {
