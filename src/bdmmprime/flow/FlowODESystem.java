@@ -1,8 +1,7 @@
 package bdmmprime.flow;
 
 import bdmmprime.parameterization.Parameterization;
-import org.apache.commons.math3.linear.BlockRealMatrix;
-import org.apache.commons.math3.linear.RealMatrix;
+import org.apache.commons.math3.linear.*;
 import org.apache.commons.math3.ode.ContinuousOutputModel;
 
 public class FlowODESystem extends IntervalODESystem {
@@ -18,7 +17,7 @@ public class FlowODESystem extends IntervalODESystem {
         return param.getNTypes() * param.getNTypes();
     }
 
-    private RealMatrix buildSystemMatrix(double t) {
+    protected RealMatrix buildSystemMatrix(double t) {
         RealMatrix system = new BlockRealMatrix(param.getNTypes(), param.getNTypes());
 
         int interval = this.param.getIntervalIndex(t);
@@ -27,11 +26,10 @@ public class FlowODESystem extends IntervalODESystem {
         double[] extinctProbabilities = this.extinctionProbabilities.getInterpolatedState();
 
         // fill transitions
+
         for (int i = 0; i < param.getNTypes(); i++) {
             for (int j = 0; j < param.getNTypes(); j++) {
-                if (i == j) continue;
-
-                system.setEntry(
+                system.addToEntry(
                         i,
                         j,
                         this.param.getMigRates()[interval][i][j]
@@ -41,8 +39,9 @@ public class FlowODESystem extends IntervalODESystem {
         }
 
         // fill diagonals
+
         for (int i = 0; i < param.getNTypes(); i++) {
-            system.setEntry(
+            system.addToEntry(
                     i,
                     i,
                     -this.param.getDeathRates()[interval][i] - this.param.getSamplingRates()[interval][i]
@@ -54,8 +53,6 @@ public class FlowODESystem extends IntervalODESystem {
             );
 
             for (int j = 0; j < param.getNTypes(); j++) {
-                if (i == j) continue;
-
                 system.addToEntry(
                         i,
                         i,
@@ -69,7 +66,7 @@ public class FlowODESystem extends IntervalODESystem {
             }
         }
 
-        return system;
+        return system.scalarMultiply(-1.0);
     }
 
     @Override
@@ -79,7 +76,38 @@ public class FlowODESystem extends IntervalODESystem {
         RealMatrix yMatrix = Utils.toMatrix(y, numTypes);
         RealMatrix systemMatrix = this.buildSystemMatrix(t);
 
-        RealMatrix yDotMatrix = yMatrix.multiply(systemMatrix);
+        RealMatrix yDotMatrix = systemMatrix.multiply(yMatrix);
         Utils.fillArray(yDotMatrix, yDot);
+    }
+
+    public static double[] integrateUsingFlow(
+            double timeStart,
+            double timeEnd,
+            double[] initialState,
+            ContinuousOutputModel flow
+    ) {
+        int n = initialState.length;
+
+        flow.setInterpolatedTime(timeStart);
+        double[] flowStart = flow.getInterpolatedState();
+        RealMatrix flowMatrixStart = Utils.toMatrix(flowStart, n);
+
+        flow.setInterpolatedTime(timeEnd);
+        double[] flowEnd = flow.getInterpolatedState();
+        RealMatrix flowMatrixEnd = Utils.toMatrix(flowEnd, n);
+
+        RealVector likelihoodVectorEnd = Utils.toVector(initialState);
+
+        DecompositionSolver linearSolver = new LUDecomposition(flowMatrixEnd).getSolver();
+        RealVector solution = linearSolver.solve(likelihoodVectorEnd);
+
+        RealVector likelihoodVectorStart = flowMatrixStart.operate(solution);
+
+        System.out.println();
+        System.out.printf("Edge at %f to %f %n", timeStart, timeEnd);
+        System.out.println("State before " + likelihoodVectorEnd);
+        System.out.println("State after " + likelihoodVectorStart);
+
+        return likelihoodVectorStart.toArray();
     }
 }

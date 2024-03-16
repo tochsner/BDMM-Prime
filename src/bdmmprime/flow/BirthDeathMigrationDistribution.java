@@ -9,10 +9,6 @@ import beast.base.evolution.tree.Tree;
 import beast.base.evolution.tree.TreeInterface;
 import beast.base.inference.parameter.RealParameter;
 import org.apache.commons.math.special.Gamma;
-import org.apache.commons.math3.linear.DecompositionSolver;
-import org.apache.commons.math3.linear.QRDecomposition;
-import org.apache.commons.math3.linear.RealMatrix;
-import org.apache.commons.math3.linear.RealVector;
 import org.apache.commons.math3.ode.ContinuousOutputModel;
 
 import java.util.Arrays;
@@ -45,7 +41,7 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
     public Input<Double> relativeToleranceInput = new Input<>(
             "relTolerance",
             "Relative tolerance for numerical integration.",
-            1e-7
+            1e-10
     );
 
     public Input<Double> absoluteToleranceInput = new Input<>(
@@ -153,7 +149,7 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
         double[] initialState = new double[this.parameterization.getNTypes() * this.parameterization.getNTypes()];
         for (int i = 0; i < this.parameterization.getNTypes(); i++) {
             // fill diagonal entries with 1 to get the identity matrix
-            initialState[i * this.parameterization.getNTypes() + i] = 1.0;
+            initialState[i * this.parameterization.getNTypes() + i] = 1;
         }
 
         return system.integrateOverIntegrals(initialState, this.absoluteTolerance, this.relativeTolerance);
@@ -169,6 +165,8 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
         // we first calculate the likelihood of the tree starting at the end of the edge
 
         double[] likelihoodEdgeEnd = new double[this.parameterization.getNTypes()];
+        double[] extinctionFactor = new double[this.parameterization.getNTypes()];
+        Arrays.fill(extinctionFactor, 1.0);
 
         int intervalEdgeEnd = this.parameterization.getIntervalIndex(timeEdgeEnd);
 
@@ -185,6 +183,8 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
             );
 
         } else if (root.getChild(0).isDirectAncestor() || root.getChild(1).isDirectAncestor()) {
+            Node directAncestor = root.getChild(0).isDirectAncestor() ?
+                    root.getChild(0) : root.getChild(1);
             Node child = root.getChild(0).isDirectAncestor() ?
                     root.getChild(1) : root.getChild(0);
 
@@ -196,12 +196,11 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
                     extinctionProbabilities
             );
 
-            for (int i = 0; i < this.parameterization.getNTypes(); i++) {
-                int nodeType = this.getNodeType(root);
-                likelihoodEdgeEnd[i] = this.parameterization.getSamplingRates()[intervalEdgeEnd][nodeType]
-                        * (1 - this.parameterization.getRemovalProbs()[intervalEdgeEnd][nodeType])
-                        * likelihoodChild[i];
-            }
+            int nodeType = this.getNodeType(directAncestor);
+            likelihoodEdgeEnd[nodeType] = this.parameterization.getSamplingRates()[intervalEdgeEnd][nodeType]
+                    * (1 - this.parameterization.getRemovalProbs()[intervalEdgeEnd][nodeType])
+                    * likelihoodChild[nodeType];
+            extinctionFactor[nodeType] = 0.0;
         } else {    // normal edge
 
             Node child1 = root.getChild(0);
@@ -242,23 +241,12 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
 
         }
 
-        // to integrate over the edge, we solve the linear system
-
-        flow.setInterpolatedTime(timeEdgeStart);
-        double[] flowEdgeStart = flow.getInterpolatedState();
-        RealMatrix flowMatrixEdgeStart = Utils.toMatrix(flowEdgeStart, this.parameterization.getNTypes());
-
-        flow.setInterpolatedTime(timeEdgeEnd);
-        double[] flowEdgeEnd = flow.getInterpolatedState();
-        RealMatrix flowMatrixEdgeEnd = Utils.toMatrix(flowEdgeEnd, this.parameterization.getNTypes());
-
-        RealVector likelihoodVectorEdgeEnd = Utils.toVector(likelihoodEdgeEnd);
-
-        DecompositionSolver linearSolver = new QRDecomposition(flowMatrixEdgeStart).getSolver();
-        RealVector solution = linearSolver.solve(likelihoodVectorEdgeEnd);
-
-        RealVector likelihoodVectorEdgeStart = flowMatrixEdgeEnd.operate(solution);
-        return likelihoodVectorEdgeStart.toArray();
+        return FlowODESystem.integrateUsingFlow(
+                timeEdgeStart,
+                timeEdgeEnd,
+                likelihoodEdgeEnd,
+                flow
+        );
     }
 
     private int getNodeType(Node node) {

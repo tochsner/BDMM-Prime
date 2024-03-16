@@ -24,6 +24,12 @@ public class Utils  {
         }
     }
 
+    public static void fillVector(RealVector vector, double[] array) {
+        for (int i = 0; i < vector.getDimension(); i++) {
+            array[i] = vector.getEntry(i);
+        }
+    }
+
     public static RealVector toVector(double[] array) {
         return new ArrayRealVector(array);
     }

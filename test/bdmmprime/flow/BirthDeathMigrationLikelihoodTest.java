@@ -9,11 +9,6 @@ import org.junit.Test;
 
 import static junit.framework.Assert.assertEquals;
 
-
-/**
- * Created by Jeremie Scire (jscire) on 26.06.17.
- */
-
 public class BirthDeathMigrationLikelihoodTest {
 
     double runtime;
@@ -172,7 +167,7 @@ public class BirthDeathMigrationLikelihoodTest {
                 "processLength", new RealParameter("6.0"),
                 "R0", new SkylineVectorParameter(
                         null,
-                        new RealParameter(String.valueOf(4.0 / 3.0))),
+                        new RealParameter(String.valueOf(4.0/3.0))),
                 "becomeUninfectiousRate", new SkylineVectorParameter(
                         null,
                         new RealParameter("1.5")),
@@ -180,7 +175,7 @@ public class BirthDeathMigrationLikelihoodTest {
                 "migrationRate", new SkylineMatrixParameter(null, null),
                 "samplingProportion", new SkylineVectorParameter(
                         null,
-                        new RealParameter(String.valueOf(1.0 / 3.0))),
+                        new RealParameter(String.valueOf(1.0/3.0))),
                 "removalProb", new SkylineVectorParameter(
                         new RealParameter("1.0"),
                         new RealParameter("0.3 0.7")));
@@ -281,7 +276,7 @@ public class BirthDeathMigrationLikelihoodTest {
                 "processLength", new RealParameter("6.0"),
                 "R0", new SkylineVectorParameter(
                         new RealParameter("1.0"),
-                        new RealParameter((4.0 / 3.0) + " 1.1"),
+                        new RealParameter((4.0/3.0) + " 1.1"),
                         2),
                 "becomeUninfectiousRate", new SkylineVectorParameter(
                         new RealParameter("1.0"),
@@ -390,6 +385,53 @@ public class BirthDeathMigrationLikelihoodTest {
         assertEquals(-33.7573 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-4); // Reference BDSKY
     }
 
+    @Test
+    public void testLikelihoodTwoState() {
+
+        String newick = "((1[&type=0]: 1.5, 2[&type=1]: 0)3[&type=0]: 3.5, 4[&type=1]: 4) ;";
+
+        Parameterization parameterization = new EpiParameterization();
+        parameterization.initByName(
+                "typeSet", new TypeSet(2),
+                "processLength", new RealParameter("6.0"),
+                "R0", new SkylineVectorParameter(
+                        null,
+                        new RealParameter((4.0/3.0) + " 1.1"),
+                        2),
+                "becomeUninfectiousRate", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("1.5 1.4"),
+                        2),
+                "R0AmongDemes", new SkylineMatrixParameter(
+                        null,
+                        new RealParameter("0.0"),
+                        2),
+                "migrationRate", new SkylineMatrixParameter(
+                        null,
+                        new RealParameter("0.2 0.3"),
+                        2),
+                "samplingProportion", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("0.33"),
+                        2),
+                "removalProb", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("0.3 0.4")));
+
+        bdmmprime.flow.BirthDeathMigrationDistribution density = new bdmmprime.flow.BirthDeathMigrationDistribution();
+        density.initByName(
+                "parameterization", parameterization,
+                "frequencies", new RealParameter("0.5 0.5"),
+                "tree", new TreeParser(newick, false, false, true,0),
+                "typeLabel", "type"
+        );
+
+        double logL = density.calculateLogP();
+
+        // Reference BDMM (version 0.2.0) 29/03/2018
+        assertEquals(-24.290260360706306, logL, 1e-5);
+    }
+
     /**
      * Basic tests on 2 types situations with migration or birth among demes
      * reference from R
@@ -489,5 +531,217 @@ public class BirthDeathMigrationLikelihoodTest {
         density.initAndValidate();
 
         assertEquals(-7.700916 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-6); // result from R
+    }
+
+    /**
+     * Test migration
+     * 2 types, migration, no birth among demes
+     * Adapted from BDSKY
+     */
+    @Test
+    public void testLikelihoodCalculationMig() {
+
+        // uncoloured tree, asymmetric types
+        Tree tree = new TreeParser(
+                "((3[&type=0] : 1.5, 4[&type=1] : 0.5) : 1 , (1[&type=1] : 2, 2[&type=0] : 1) : 3);",
+                false);
+
+        Parameterization parameterization = new EpiParameterization();
+        parameterization.initByName(
+                "processLength", new RealParameter("6.0"),
+                "typeSet", new TypeSet(2),
+                "R0", new SkylineVectorParameter(
+                        null,
+                        new RealParameter((4.0 / 3.0) + " " + 5.0)),
+                "becomeUninfectiousRate", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("1.5 1.25")),
+                "samplingProportion", new SkylineVectorParameter(
+                        null,
+                        new RealParameter((1.0 / 3.0) + " " + (1.0/2.0))),
+                "migrationRate", new SkylineMatrixParameter(
+                        null,
+                        new RealParameter("0.2 0.1")),
+
+                "removalProb", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("1.0"), 2));
+
+        bdmmprime.flow.BirthDeathMigrationDistribution density = new bdmmprime.flow.BirthDeathMigrationDistribution();
+        density.initByName("parameterization", parameterization,
+                "frequencies", new RealParameter("0.5 0.5"),
+                "tree", tree,
+                "typeLabel", "type"
+        );
+
+        assertEquals(-26.53293 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-5);
+    }
+
+    /**
+     * Test of migration and infection among demes with rate changes
+     * 2 types, no SA
+     * Uncoloured tree
+     * Reference from BDMM itself (version 0.2.0 28/06/2017)
+     * @throws Exception
+     */
+    @Test
+    public void testAmongRateChange() throws Exception {
+
+        Tree tree = new TreeParser("((3[&type=0]:1.5,4[&type=1]:0.5):1,(1[&type=1]:1,2[&type=0]:1):3);",
+                false);
+
+        Parameterization parameterization = new EpiParameterization();
+        parameterization.initByName(
+                "processLength", new RealParameter("4.1"),
+                "typeSet", new TypeSet(2),
+                "R0", new SkylineVectorParameter(
+                        new RealParameter("1.0"),
+                        new RealParameter("6 5 2 2.5"), 2),
+                "becomeUninfectiousRate", new SkylineVectorParameter(
+                        new RealParameter("1.0"),
+                        new RealParameter("0.5 0.55 0.45 0.6"), 2),
+                "samplingProportion", new SkylineVectorParameter(
+                        new RealParameter("1.0"),
+                        new RealParameter("0.5 0.45 0.333333 0.35"), 2),
+                "R0AmongDemes", new SkylineMatrixParameter(
+                        new RealParameter("1.0"),
+                        new RealParameter("1.1 1.3 1.2 1.15"), 2),
+                "migrationRate", new SkylineMatrixParameter(
+                        new RealParameter("1.0"),
+                        new RealParameter("0.1 0.15 0.2 0.25")),
+                "removalProb", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("1.0"), 2));
+
+        bdmmprime.flow.BirthDeathMigrationDistribution density = new bdmmprime.flow.BirthDeathMigrationDistribution();
+        density.initByName("parameterization", parameterization,
+                "frequencies", new RealParameter("0.5 0.5"),
+                "tree", tree,
+                "typeLabel", "type"
+        );
+
+        assertEquals(-16.466832439520886 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-4); // result from BDMM, 28/06/2017
+    }
+
+    /**
+     * Test of migration and infection among demes with rate changes
+     * 2 types, no SA
+     * Uncoloured tree
+     * Reference from BDMM itself (version 0.2.0 28/06/2017)
+     * @throws Exception
+     */
+    @Test
+    public void testAmongNoRateChange() throws Exception {
+
+        Tree tree = new TreeParser("((3[&type=1]:1.5,4[&type=1]:0.5):1,(1[&type=1]:2,2[&type=1]:1):3);",
+                false);
+
+        Parameterization parameterization = new EpiParameterization();
+        parameterization.initByName(
+                "processLength", new RealParameter("6.0"),
+                "typeSet", new TypeSet(2),
+                "R0", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("0 0"), 2),
+                "becomeUninfectiousRate", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("0 0.75"), 2),
+                "samplingProportion", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("0 0.7"), 2),
+                "R0AmongDemes", new SkylineMatrixParameter(
+                        null,
+                        new RealParameter("0 2"), 2),
+                "migrationRate", new SkylineMatrixParameter(
+                        null,
+                        new RealParameter("0.5 0")),
+                "removalProb", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("1.0"), 2));
+
+        bdmmprime.flow.BirthDeathMigrationDistribution density = new bdmmprime.flow.BirthDeathMigrationDistribution();
+        density.initByName("parameterization", parameterization,
+                "frequencies", new RealParameter("1.0 0.0"),
+                "tree", tree,
+                "typeLabel", "type"
+        );
+
+        assertEquals(-12.1441 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-4); // tanja's result from R
+    }
+
+    /**
+     * Test of migration with 3 types
+     * No rate change, no SA
+     * Reference from BDMM itself
+     * @throws Exception
+     */
+    @Test
+    public void testMig3types() throws Exception {
+
+        Tree tree = new TreeParser("((3[&type=2]:1.5,4[&type=1]:0.5):1,(1[&type=1]:1,2[&type=0]:1):3);",
+                false);
+
+        Parameterization parameterization = new EpiParameterization();
+        parameterization.initByName(
+                "processLength", new RealParameter("4.1"),
+                "typeSet", new TypeSet(3),
+                "R0", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("6 2 5")),
+                "becomeUninfectiousRate", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("0.5 0.45 0.55")),
+                "samplingProportion", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("0.5 0.333333 0.45")),
+                "migrationRate", new SkylineMatrixParameter(
+                        null,
+                        new RealParameter("0.1 0.2 0.15 0.12 0.12 0.15")),
+                "removalProb", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("1.0"), 3));
+
+        bdmmprime.flow.BirthDeathMigrationDistribution density = new bdmmprime.flow.BirthDeathMigrationDistribution();
+        density.initByName("parameterization", parameterization,
+                "frequencies", new RealParameter((1.0/3.0) + " " + (1.0/3.0) + " " + (1.0/3.0)),
+                "tree", tree,
+                "typeLabel", "type"
+        );
+
+        assertEquals(-16.88601100061662 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-4); // result from BDMM, version 0.2.0, 06/07/2017
+    }
+
+    /**
+     * Likelihood test from the Sasha's SA package.
+     */
+    @Test
+    public void testSALikelihoodMini3() {
+        String newick = "((1:1.0,2:0.0):1.0,3:0):0.0";
+
+        Parameterization parameterization = new CanonicalParameterization();
+        parameterization.initByName(
+                "processLength", new RealParameter("10.0"),
+                "birthRate", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("2.0")),
+                "deathRate", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("0.99")),
+                "samplingRate", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("0.5")),
+                "removalProb", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("0.9")));
+
+        bdmmprime.flow.BirthDeathMigrationDistribution density = new bdmmprime.flow.BirthDeathMigrationDistribution();
+        density.initByName(
+                "parameterization", parameterization,
+                "tree", new TreeParser(newick, false, false, true,0)
+        );
+
+        // this value was calculated by Sasha with Mathematica
+        assertEquals(-25.3707 + labeledTreeConversionFactor(density),
+                density.calculateLogP(), 1e-5); // likelihood conditioning on at least one sampled individual
     }
 }

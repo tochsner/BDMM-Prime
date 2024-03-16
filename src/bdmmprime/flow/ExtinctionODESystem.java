@@ -26,8 +26,6 @@ public class ExtinctionODESystem extends IntervalODESystem {
             yDot[i] -= param.getDeathRates()[interval][i];
 
             for (int j = 0; j < this.param.getNTypes(); j++) {
-                if (i == j) continue;
-
                 yDot[i] += param.getCrossBirthRates()[interval][i][j] * (y[i] - y[i] * y[j]);
                 yDot[i] += param.getMigRates()[interval][i][j] * (y[i] - y[j]);
             }
