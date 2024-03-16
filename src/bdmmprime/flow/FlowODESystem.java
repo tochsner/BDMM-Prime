@@ -98,7 +98,7 @@ public class FlowODESystem extends IntervalODESystem {
 
         RealVector likelihoodVectorEnd = Utils.toVector(initialState);
 
-        DecompositionSolver linearSolver = new LUDecomposition(flowMatrixEnd).getSolver();
+        DecompositionSolver linearSolver = new QRDecomposition(flowMatrixEnd).getSolver();
         RealVector solution = linearSolver.solve(likelihoodVectorEnd);
 
         RealVector likelihoodVectorStart = flowMatrixStart.operate(solution);
