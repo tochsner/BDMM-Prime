@@ -1015,4 +1015,55 @@ public class BirthDeathMigrationLikelihoodTest {
                 density.calculateLogP(), 1e-5); // likelihood conditioning on at least one sampled individual
     }
 
+    /**
+     * Test on sampled-ancestors lik. calculation with no sampled ancestor
+     * No rate-change, one state, 4 tips
+     * This state is just there in case something is broken with sampled ancestors,
+     * helps for debugging if combined with testSALikelihoodMini for instance
+     */
+    @Test
+    public void testSALikelihoodCalculationWithoutAncestors() {
+
+        Tree tree = new TreeParser("((3[&type=0] : 1.5, 4[&type=0] : 0.5) : 1 , (1[&type=0] : 2, 2[&type=0] : 1) : 3);",
+                false);
+
+        Parameterization parameterization = new EpiParameterization();
+        parameterization.initByName(
+                "processLength", tree,
+                "typeSet", new TypeSet(1),
+                "R0", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("1.5")),
+                "becomeUninfectiousRate", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("1.5")),
+                "samplingProportion", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("0.3")),
+                "removalProb", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("0.9")));
+
+        bdmmprime.flow.BirthDeathMigrationDistribution density = new bdmmprime.flow.BirthDeathMigrationDistribution();
+        density.initByName("parameterization", parameterization,
+                "frequencies", new RealParameter("1.0"),
+                "conditionOnSurvival", true,
+                "conditionOnRoot", true,
+                "tree", tree,
+                "typeLabel", "type"
+        );
+
+        // Conditioned on root:
+
+        assertEquals(-15.545323363405362 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-4);
+
+        // Conditioned on origin:
+
+        parameterization.setInputValue("processLength", new RealParameter("10.0"));
+        parameterization.initAndValidate();
+        density.setInputValue("conditionOnRoot", false);
+        density.initAndValidate();
+
+        assertEquals(-25.991511346557598 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-4);
+    }
 }
