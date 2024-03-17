@@ -137,6 +137,7 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
         }
 
         // consider different ways to condition the tree
+
         double conditionDensity = this.calculateConditionDensity(extinctionProbabilities);
         treeLikelihood /= conditionDensity;
 
@@ -151,16 +152,29 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
     }
 
     private double calculateConditionDensity(ContinuousOutputModel extinctionProbabilities) {
+        // see Tanja Stadler, How Can We Improve Accuracy of Macroevolutionary Rate Estimates?,
+        // Systematic Biology, Volume 62, Issue 2, March 2013, Pages 321–329,
+        // https://doi.org/10.1093/sysbio/sys073
         double conditionDensity = 0.0;
 
-        if (this.conditionOnSurvival) {
-            // we have to get the extinction probabilities at the time of the latest leaf
-            double maxLeafTime = this.parameterization.getNodeTime(this.tree.getNode(0), this.finalSampleOffset);
+        if (this.conditionOnRoot) {
+            extinctionProbabilities.setInterpolatedTime(0);
+            double[] extinctionAtRoot = extinctionProbabilities.getInterpolatedState();
 
-            for (int i = 0; i < this.tree.getLeafNodeCount(); i++) { // get all leaf times
-                maxLeafTime = Math.max(maxLeafTime, this.parameterization.getNodeTime(this.tree.getNode(i), this.finalSampleOffset));
+            int startInterval = this.parameterization.getIntervalIndex(0);
+
+            for (int type1 = 0; type1 < parameterization.getNTypes(); type1++) {
+                for (int type2 = 0; type2 < parameterization.getNTypes(); type2++) {
+                    double rate = type1 == type2
+                            ? parameterization.getBirthRates()[startInterval][type1]
+                            : parameterization.getCrossBirthRates()[startInterval][type1][type2];
+
+                    conditionDensity += rate*this.frequencies[type1]
+                            * (1 - extinctionAtRoot[type1])
+                            * (1 - extinctionAtRoot[type2]);
+                }
             }
-
+        } else if (this.conditionOnSurvival) {
             extinctionProbabilities.setInterpolatedTime(0);
             double[] extinctionAtRoot = extinctionProbabilities.getInterpolatedState();
 
@@ -321,7 +335,6 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
 
         return likelihoodEdgeEnd;
     }
-
 
     private int getNodeType(Node node) {
         if (parameterization.getNTypes() == 1) {
