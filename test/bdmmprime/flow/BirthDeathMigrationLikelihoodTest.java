@@ -1078,4 +1078,492 @@ public class BirthDeathMigrationLikelihoodTest {
 
         assertEquals(logL1, logL2, 1e-5);
     }
+
+    /**
+     * Test simple configuration with one rho-sampling event.
+     * One type, no psi-sampling, no sampled-ancestor
+     * No rate-changes
+     * Reference: R
+     */
+    @Test
+    public void testSingleRho() {
+
+        Tree tree = new TreeParser("((1[&type=0]: 4.5, 2[&type=0]: 4.5):1,3[&type=0]:5.5);",false);
+
+        Parameterization parameterization = new EpiParameterization();
+        parameterization.initByName(
+                "typeSet", new TypeSet(1),
+                "processLength", tree,
+                "R0", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("1.5")),
+                "becomeUninfectiousRate", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("1.5")),
+                "R0AmongDemes", new SkylineMatrixParameter(
+                        null,
+                        null),
+                "migrationRate", new SkylineMatrixParameter(
+                        null,
+                        null),
+                "samplingProportion", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("0.0")),
+                "removalProb", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("1.0")),
+                "rhoSampling", new TimedParameter(
+                        new RealParameter("5.5"),
+                        new RealParameter("0.01")));
+
+        bdmmprime.flow.BirthDeathMigrationDistribution density = new bdmmprime.flow.BirthDeathMigrationDistribution();
+        density.initByName(
+                "parameterization", parameterization,
+                "frequencies", new RealParameter("1.0"),
+                "conditionOnRoot", true,
+                "tree", tree,
+                "typeLabel", "type"
+        );
+
+        double logL = density.calculateLogP();
+
+        // this result is from the R package, TreePar:
+        // LikConstant(2.25,1.5,0.01,c(4.5,5.5),root=1,survival=1)
+        assertEquals(-3.72382 + labeledTreeConversionFactor(density), logL, 1e-4);
+
+        // test with conditioned-on-survival tree
+        parameterization.setInputValue("processLength", "10");
+        parameterization.setInputValue("rhoSampling",
+                new TimedParameter(new RealParameter("10"),
+                        new RealParameter("0.01")));
+        parameterization.initAndValidate();
+
+        density.setInputValue("conditionOnSurvival", true);
+        density.setInputValue("conditionOnRoot", false);
+        density.initAndValidate();
+
+        double logL2 = density.calculateLogP();
+
+        // this result is from R: LikConstant(2.25,1.5,0.01,c(4.5,5.5,5.5+1e-100),root=0,survival=1)
+        assertEquals(-7.404227 + labeledTreeConversionFactor(density), logL2, 1e-4);
+    }
+
+    /**
+     * Basic test for rho-sampling in the past
+     * One type, 2 tips, one state
+     * No rate changes
+     * @throws Exception
+     */
+    @Test
+    public void testMultiRho2tips() throws Exception {
+
+        // two tips sampled at the same time
+        Tree tree = new TreeParser("(3[&type=0]: 4, 4[&type=0]: 4) ;",false);
+
+        RealParameter originParam = new RealParameter("5.0");
+
+        Parameterization parameterization = new EpiParameterization();
+        parameterization.initByName(
+                "typeSet", new TypeSet(1),
+                "processLength", originParam,
+                "R0", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("1.5")),
+                "becomeUninfectiousRate", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("1.5")),
+                "R0AmongDemes", new SkylineMatrixParameter(
+                        null,
+                        null),
+                "migrationRate", new SkylineMatrixParameter(
+                        null,
+                        null),
+                "samplingProportion", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("0.0")),
+                "removalProb", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("1.0")),
+                "rhoSampling", new TimedParameter(
+                        new RealParameter("0.0 2.5"),
+                        new RealParameter("1.0 0.2"),
+                        originParam)
+        );
+
+
+        bdmmprime.flow.BirthDeathMigrationDistribution density = new bdmmprime.flow.BirthDeathMigrationDistribution();
+        density.initByName(
+                "parameterization", parameterization,
+                "frequencies", new RealParameter("1.0"),
+                "conditionOnSurvival", true,
+                "tree", tree,
+                "typeLabel", "type"
+        );
+
+        double logL = density.calculateLogP();
+
+        // this result is from BEAST: BDSKY, not double checked in R
+        assertEquals(-10.569863754307026, logL, 1e-4);
+
+        // tips sampled at two different times
+        tree = new TreeParser("(3[&type=0]: 1.5, 4[&type=0]: 4) ;",false);
+        density.setInputValue("tree", tree);
+        density.initAndValidate();
+
+        double logL2 = density.calculateLogP();
+
+        // this result is from BEAST: BDSKY, not double checked in R
+        assertEquals(-8.099631076932816, logL2, 1e-4);
+    }
+
+    /**
+     * Test with combined multiple-rho-sampling events in the past and psi-sampling
+     * was "TestRhoSasha"
+     * One type, no rate-changes, no sampled-ancestors
+     * 26 tips
+     * @throws Exception
+     */
+    @Test
+    public void testMultiRhoSampling() throws Exception {
+        // Uncoloured tree
+        Tree tree = new TreeParser("(((((t1[&type=0]:0.4595008531,t25[&type=0]:0.4595008531)[&type=0]:0.3373053072,t23[&type=0]:0.3567584538)[&type=0]:0.007310819036,t16[&type=0]:0.3489190732)[&type=0]:0.331009529,((t18[&type=0]:0.03315384045,t14[&type=0]:0.03315384045)[&type=0]:0.5063451374,(t10[&type=0]:0.4211543131,t15[&type=0]:0.4211543131)[&type=0]:0.1183446648)[&type=0]:0.5956275305)[&type=0]:0.1158090878,((t19[&type=0]:0.9429393194,((t6[&type=0]:0.363527235,t11[&type=0]:0.4417423167)[&type=0]:0.01881829549,((((t3[&type=0]:0.3071904376,(((t24[&type=0]:0.01065209364,t13[&type=0]:0.01065209364)[&type=0]:0.06076485145,t8[&type=0]:0.07141694509)[&type=0]:0.123620245,(t22[&type=0]:0.1616119808,t2[&type=0]:0.1616119808)[&type=0]:0.03342520927)[&type=0]:0.1121532475)[&type=0]:0.24520579,t9[&type=0]:0.5523962276)[&type=0]:0.3852615426,(((t20[&type=0]:0.2935970782,(t17[&type=0]:0.06569090089,t4[&type=0]:0.06569090089)[&type=0]:0.2279061773)[&type=0]:0.08350780408,(t21[&type=0]:0.05109047139,t5[&type=0]:0.05109047139)[&type=0]:0.3260144109)[&type=0]:0.2298344132,t7[&type=0]:0.6069392955)[&type=0]:0.3307184747)[&type=0]:0.01206284377,t26[&type=0]:0.9497206139)[&type=0]:0.05755333197)[&type=0]:0.03290891884)[&type=0]:0.07263755325,t12[&type=0]:1.112820418)[&type=0]:0.1381151782);",false);
+
+        RealParameter originParam = new RealParameter("2.0");
+
+        Parameterization parameterization = new EpiParameterization();
+        parameterization.initByName(
+                "typeSet", new TypeSet(1),
+                "processLength", originParam,
+                "R0", new SkylineVectorParameter(
+                        null,
+                        new RealParameter(new Double[]{3.0/4.5})),
+                "becomeUninfectiousRate", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("4.5")),
+                "R0AmongDemes", new SkylineMatrixParameter(
+                        null,
+                        null),
+                "migrationRate", new SkylineMatrixParameter(
+                        null,
+                        null),
+                "samplingProportion", new SkylineVectorParameter(
+                        null,
+                        new RealParameter(new Double[]{2.0/4.5})),
+                "removalProb", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("1.0")),
+                "rhoSampling", new TimedParameter(
+                        new RealParameter("1.0 1.5 2.0"),
+                        new RealParameter("0.0 0.05 0.01")));
+
+
+        bdmmprime.flow.BirthDeathMigrationDistribution density = new bdmmprime.flow.BirthDeathMigrationDistribution();
+        density.initByName(
+                "parameterization", parameterization,
+                "frequencies", new RealParameter("1.0"),
+                "conditionOnSurvival", false,
+                "tree", tree,
+                "typeLabel", "type"
+        );
+
+        assertEquals(-124.96086690757612 + labeledTreeConversionFactor(density),
+                density.calculateLogP(), 1e-2);     // this result is from BEAST, not double checked in R
+
+        parameterization.setInputValue("rhoSampling",
+                new TimedParameter(new RealParameter("0.0 0.5 1.0"),
+                        new RealParameter("0.01 0.05 0.0"),
+                        originParam));
+        parameterization.initAndValidate();
+        density.initAndValidate();
+
+        assertEquals(-124.96086690757612 + labeledTreeConversionFactor(density),
+                density.calculateLogP(), 1e-2);     // this result is from BEAST, not double checked in R
+    }
+
+    /**
+     * Test with multiple cases for rho-sampling in the past combined with rate changes
+     * 1 state, no sampled ancestors
+     * 26 tips
+     */
+    @Test
+    public void testMultiRhoWithRateChanges1() {
+
+        Tree tree = new TreeParser("(((((t1[&type=0]:0.4595008531,t25[&type=0]:0.4595008531)[&type=0]:0.3373053072,t23[&type=0]:0.3567584538)[&type=0]:0.007310819036,t16[&type=0]:0.3489190732)[&type=0]:0.331009529,((t18[&type=0]:0.03315384045,t14[&type=0]:0.03315384045)[&type=0]:0.5063451374,(t10[&type=0]:0.4211543131,t15[&type=0]:0.4211543131)[&type=0]:0.1183446648)[&type=0]:0.5956275305)[&type=0]:0.1158090878,((t19[&type=0]:0.9429393194,((t6[&type=0]:0.363527235,t11[&type=0]:0.4417423167)[&type=0]:0.01881829549,((((t3[&type=0]:0.3071904376,(((t24[&type=0]:0.01065209364,t13[&type=0]:0.01065209364)[&type=0]:0.06076485145,t8[&type=0]:0.07141694509)[&type=0]:0.123620245,(t22[&type=0]:0.1616119808,t2[&type=0]:0.1616119808)[&type=0]:0.03342520927)[&type=0]:0.1121532475)[&type=0]:0.24520579,t9[&type=0]:0.5523962276)[&type=0]:0.3852615426,(((t20[&type=0]:0.2935970782,(t17[&type=0]:0.06569090089,t4[&type=0]:0.06569090089)[&type=0]:0.2279061773)[&type=0]:0.08350780408,(t21[&type=0]:0.05109047139,t5[&type=0]:0.05109047139)[&type=0]:0.3260144109)[&type=0]:0.2298344132,t7[&type=0]:0.6069392955)[&type=0]:0.3307184747)[&type=0]:0.01206284377,t26[&type=0]:0.9497206139)[&type=0]:0.05755333197)[&type=0]:0.03290891884)[&type=0]:0.07263755325,t12[&type=0]:1.112820418)[&type=0]:0.1381151782);", false);
+
+        // no rate-change, rho-sampling at present
+        RealParameter originParam = new RealParameter("2.0");
+        Parameterization parameterization = new CanonicalParameterization();
+        parameterization.initByName(
+                "typeSet", new TypeSet(1),
+                "processLength", originParam,
+                "birthRate", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("2.0")),
+                "deathRate", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("0.5")),
+                "samplingRate", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("0.5")),
+                "removalProb", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("1.0")),
+                "birthRateAmongDemes", new SkylineMatrixParameter(
+                        null,
+                        null),
+                "migrationRate", new SkylineMatrixParameter(
+                        null,
+                        null),
+                "rhoSampling", new TimedParameter(
+                        new RealParameter("0.0"),
+                        new RealParameter("1.0"),
+                        originParam));
+
+        bdmmprime.flow.BirthDeathMigrationDistribution density = new bdmmprime.flow.BirthDeathMigrationDistribution();
+        density.initByName("parameterization", parameterization,
+                "frequencies", new RealParameter("1.0"),
+                "conditionOnSurvival", true,
+                "tree", tree,
+                "typeLabel", "type"
+        );
+
+        assertEquals(-21.42666177086957 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-5);
+
+        bdmmprime.flow.BirthDeathMigrationDistribution densityExact = new bdmmprime.flow.BirthDeathMigrationDistribution();
+        densityExact.initByName("parameterization", parameterization,
+                "frequencies", new RealParameter("1.0"),
+                "conditionOnSurvival", true,
+                "tree", tree,
+                "typeLabel", "type",
+                "parallelize"
+        );
+
+        assertEquals(-21.42666177086957 + labeledTreeConversionFactor(density), densityExact.calculateLogP(), 1e-5);
+    }
+
+
+    @Test
+    public void testMultiRhoWithRateChanges2() {
+
+        Tree tree = new TreeParser("(((((t1[&type=0]:0.4595008531,t25[&type=0]:0.4595008531)[&type=0]:0.3373053072,t23[&type=0]:0.3567584538)[&type=0]:0.007310819036,t16[&type=0]:0.3489190732)[&type=0]:0.331009529,((t18[&type=0]:0.03315384045,t14[&type=0]:0.03315384045)[&type=0]:0.5063451374,(t10[&type=0]:0.4211543131,t15[&type=0]:0.4211543131)[&type=0]:0.1183446648)[&type=0]:0.5956275305)[&type=0]:0.1158090878,((t19[&type=0]:0.9429393194,((t6[&type=0]:0.363527235,t11[&type=0]:0.4417423167)[&type=0]:0.01881829549,((((t3[&type=0]:0.3071904376,(((t24[&type=0]:0.01065209364,t13[&type=0]:0.01065209364)[&type=0]:0.06076485145,t8[&type=0]:0.07141694509)[&type=0]:0.123620245,(t22[&type=0]:0.1616119808,t2[&type=0]:0.1616119808)[&type=0]:0.03342520927)[&type=0]:0.1121532475)[&type=0]:0.24520579,t9[&type=0]:0.5523962276)[&type=0]:0.3852615426,(((t20[&type=0]:0.2935970782,(t17[&type=0]:0.06569090089,t4[&type=0]:0.06569090089)[&type=0]:0.2279061773)[&type=0]:0.08350780408,(t21[&type=0]:0.05109047139,t5[&type=0]:0.05109047139)[&type=0]:0.3260144109)[&type=0]:0.2298344132,t7[&type=0]:0.6069392955)[&type=0]:0.3307184747)[&type=0]:0.01206284377,t26[&type=0]:0.9497206139)[&type=0]:0.05755333197)[&type=0]:0.03290891884)[&type=0]:0.07263755325,t12[&type=0]:1.112820418)[&type=0]:0.1381151782);", false);
+
+        // rate-changes, rho-sampling in the past
+        RealParameter originParam = new RealParameter("2.0");
+        Parameterization parameterization = new EpiParameterization();
+        parameterization.initByName(
+                "typeSet", new TypeSet(1),
+                "processLength", originParam,
+                "R0", new SkylineVectorParameter(
+                        new RealParameter("1.0 1.5"),
+                        new RealParameter(new Double[]{3.0/4.5, 2.0/1.5, 4.0/1.5})),
+                "becomeUninfectiousRate", new SkylineVectorParameter(
+                        new RealParameter("1.0 1.5"),
+                        new RealParameter("4.5 1.5 1.5")),
+                "samplingProportion", new SkylineVectorParameter(
+                        new RealParameter("1.0 1.5"),
+                        new RealParameter(new Double[]{2.0/4.5, 0.5/1.5, 1.0/1.5})),
+                "removalProb", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("1.0")),
+                "R0AmongDemes", new SkylineMatrixParameter(
+                        null,
+                        null),
+                "migrationRate", new SkylineMatrixParameter(
+                        null,
+                        null),
+                "rhoSampling", new TimedParameter(
+                        new RealParameter("2.0"),
+                        new RealParameter("0.01")));
+
+        bdmmprime.flow.BirthDeathMigrationDistribution density = new bdmmprime.flow.BirthDeathMigrationDistribution();
+        density.initByName("parameterization", parameterization,
+                "frequencies", new RealParameter("1.0"),
+                "conditionOnSurvival", false,
+                "tree", tree,
+                "typeLabel", "type"
+            );
+
+        assertEquals(-87.59718586549747 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-5);
+    }
+
+    @Test
+    public void testMultiRhoWithRateChanges3() {
+
+        Tree tree = new TreeParser("(((((t1[&type=0]:0.4595008531,t25[&type=0]:0.4595008531)[&type=0]:0.3373053072,t23[&type=0]:0.3567584538)[&type=0]:0.007310819036,t16[&type=0]:0.3489190732)[&type=0]:0.331009529,((t18[&type=0]:0.03315384045,t14[&type=0]:0.03315384045)[&type=0]:0.5063451374,(t10[&type=0]:0.4211543131,t15[&type=0]:0.4211543131)[&type=0]:0.1183446648)[&type=0]:0.5956275305)[&type=0]:0.1158090878,((t19[&type=0]:0.9429393194,((t6[&type=0]:0.363527235,t11[&type=0]:0.4417423167)[&type=0]:0.01881829549,((((t3[&type=0]:0.3071904376,(((t24[&type=0]:0.01065209364,t13[&type=0]:0.01065209364)[&type=0]:0.06076485145,t8[&type=0]:0.07141694509)[&type=0]:0.123620245,(t22[&type=0]:0.1616119808,t2[&type=0]:0.1616119808)[&type=0]:0.03342520927)[&type=0]:0.1121532475)[&type=0]:0.24520579,t9[&type=0]:0.5523962276)[&type=0]:0.3852615426,(((t20[&type=0]:0.2935970782,(t17[&type=0]:0.06569090089,t4[&type=0]:0.06569090089)[&type=0]:0.2279061773)[&type=0]:0.08350780408,(t21[&type=0]:0.05109047139,t5[&type=0]:0.05109047139)[&type=0]:0.3260144109)[&type=0]:0.2298344132,t7[&type=0]:0.6069392955)[&type=0]:0.3307184747)[&type=0]:0.01206284377,t26[&type=0]:0.9497206139)[&type=0]:0.05755333197)[&type=0]:0.03290891884)[&type=0]:0.07263755325,t12[&type=0]:1.112820418)[&type=0]:0.1381151782);", false);
+
+        // rate-changes, rho-sampling in the past and present
+        RealParameter originParam = new RealParameter("2.0");
+        Parameterization parameterization = new EpiParameterization();
+        parameterization.initByName(
+                "typeSet", new TypeSet(1),
+                "processLength", originParam,
+                "R0", new SkylineVectorParameter(
+                        new RealParameter("1.0 1.5"),
+                        new RealParameter(new Double[]{3.0/4.5, 2.0/1.5, 4.0/1.5})),
+                "becomeUninfectiousRate", new SkylineVectorParameter(
+                        new RealParameter("1.0 1.5"),
+                        new RealParameter("4.5 1.5 1.5")),
+                "samplingProportion", new SkylineVectorParameter(
+                        new RealParameter("1.0 1.5"),
+                        new RealParameter(new Double[]{2.0/4.5, 0.5/1.5, 1.0/1.5})),
+                "removalProb", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("1.0")),
+                "R0AmongDemes", new SkylineMatrixParameter(
+                        null,
+                        null),
+                "migrationRate", new SkylineMatrixParameter(
+                        null,
+                        null),
+                "rhoSampling", new TimedParameter(
+                        new RealParameter("1.0 2.0"),
+                        new RealParameter("0.05 0.01")));
+
+        bdmmprime.flow.BirthDeathMigrationDistribution density = new bdmmprime.flow.BirthDeathMigrationDistribution();
+        density.initByName("parameterization", parameterization,
+                "frequencies", new RealParameter("1.0"),
+                "conditionOnSurvival", false,
+                "tree", tree,
+                "typeLabel", "type"
+        );
+
+        assertEquals(-87.96488 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-1);
+    }
+
+    @Test
+    public void testMultiRhoWithRateChanges4() {
+
+        Tree tree = new TreeParser("(((((t1[&type=0]:0.4595008531,t25[&type=0]:0.4595008531)[&type=0]:0.3373053072,t23[&type=0]:0.3567584538)[&type=0]:0.007310819036,t16[&type=0]:0.3489190732)[&type=0]:0.331009529,((t18[&type=0]:0.03315384045,t14[&type=0]:0.03315384045)[&type=0]:0.5063451374,(t10[&type=0]:0.4211543131,t15[&type=0]:0.4211543131)[&type=0]:0.1183446648)[&type=0]:0.5956275305)[&type=0]:0.1158090878,((t19[&type=0]:0.9429393194,((t6[&type=0]:0.363527235,t11[&type=0]:0.4417423167)[&type=0]:0.01881829549,((((t3[&type=0]:0.3071904376,(((t24[&type=0]:0.01065209364,t13[&type=0]:0.01065209364)[&type=0]:0.06076485145,t8[&type=0]:0.07141694509)[&type=0]:0.123620245,(t22[&type=0]:0.1616119808,t2[&type=0]:0.1616119808)[&type=0]:0.03342520927)[&type=0]:0.1121532475)[&type=0]:0.24520579,t9[&type=0]:0.5523962276)[&type=0]:0.3852615426,(((t20[&type=0]:0.2935970782,(t17[&type=0]:0.06569090089,t4[&type=0]:0.06569090089)[&type=0]:0.2279061773)[&type=0]:0.08350780408,(t21[&type=0]:0.05109047139,t5[&type=0]:0.05109047139)[&type=0]:0.3260144109)[&type=0]:0.2298344132,t7[&type=0]:0.6069392955)[&type=0]:0.3307184747)[&type=0]:0.01206284377,t26[&type=0]:0.9497206139)[&type=0]:0.05755333197)[&type=0]:0.03290891884)[&type=0]:0.07263755325,t12[&type=0]:1.112820418)[&type=0]:0.1381151782);", false);
+
+        // rate-changes, rho-sampling in the past and present, with reversed times
+        Parameterization parameterization = new EpiParameterization();
+        parameterization.initByName(
+                "processLength", tree,
+                "typeSet", new TypeSet(1),
+                "R0", new SkylineVectorParameter(
+                        new RealParameter("0.5 1.0 1.1"),
+                        new RealParameter(new Double[]{3.0/4.5, 2.0/1.5, 4.0/1.5, 4.0/2.5})),
+                "becomeUninfectiousRate", new SkylineVectorParameter(
+                        new RealParameter("0.5 1.0 1.1"),
+                        new RealParameter("4.5 1.5 1.5 2.5")),
+                "samplingProportion", new SkylineVectorParameter(
+                        new RealParameter("0.5 1.0 1.1"),
+                        new RealParameter(new Double[]{2.0/4.5, 0.5/1.5, 1.0/1.5, 2.0/2.5})),
+                "removalProb", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("1.0")),
+                "R0AmongDemes", new SkylineMatrixParameter(
+                        null,
+                        null),
+                "migrationRate", new SkylineMatrixParameter(
+                        null,
+                        null),
+                "rhoSampling", new TimedParameter(
+                        new RealParameter("1.0 " + tree.getRoot().getHeight()),
+                        new RealParameter("0.05 0.01")));
+
+        bdmmprime.flow.BirthDeathMigrationDistribution density = new bdmmprime.flow.BirthDeathMigrationDistribution();
+        density.initByName("parameterization", parameterization,
+                "frequencies", new RealParameter("1.0"),
+                "conditionOnSurvival", false,
+                "conditionOnRoot", true,
+                "tree", tree,
+                "typeLabel", "type"
+        );
+
+        assertEquals(-99.0428845398644 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-1);
+    }
+
+    /**
+     * Test on combining migration with rho-sampling
+     * Reference from BDMM
+     */
+    @Test
+    public void testLikelihoodMigrationRhoSampling() {
+
+        Tree tree = new TreeParser("((1[&type=0]: 4.5, 2[&type=1]: 4.5):1,3[&type=0]:5.5);",
+                false);
+
+        Parameterization parameterization = new EpiParameterization();
+        parameterization.initByName(
+                "processLength", tree,
+                "typeSet", new TypeSet(2),
+                "R0", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("1.5 1.4")),
+                "becomeUninfectiousRate", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("1.5 1.3")),
+                "samplingProportion", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("0.0"), 2),
+                "removalProb", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("1.0"), 2),
+                "migrationRate", new SkylineMatrixParameter(
+                        null,
+                        new RealParameter("0.3 0.4")),
+                "rhoSampling", new TimedParameter(
+                        new RealParameter("0.0"),
+                        new RealParameter("0.01 0.015"),
+                        tree));
+
+        bdmmprime.flow.BirthDeathMigrationDistribution density = new bdmmprime.flow.BirthDeathMigrationDistribution();
+        density.initByName("parameterization", parameterization,
+                "frequencies", new RealParameter("0.6 0.4"),
+                "conditionOnSurvival", false,
+                "conditionOnRoot", true,
+                "tree", tree,
+                "typeLabel", "type"
+        );
+
+        // Corrected value from BDMM (original was incorrectly conditioned)
+        assertEquals(-5.5751511486962215 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-4);
+    }
+
+    /**
+     * Basic test on sampled-ancestors lik. calculation with multi-rho sampling.
+     * 2 tips, 1 SA. 1 type, no rate-change
+     * Coloured and uncoloured trees
+     * Reference value from BDSKY (06/04/2017)
+     * @throws Exception
+     */
+    @Test
+    public void testSALikelihoodMultiRho() throws Exception {
+
+        Tree tree = new TreeParser("((3[&type=0]: 1.5, 6[&type=0]: 0)5[&type=0]: 3.5, 4[&type=0]: 4) ;",false);
+
+        RealParameter origin = new RealParameter("6.0");
+
+        Parameterization parameterization = new EpiParameterization();
+        parameterization.initByName(
+                "processLength", origin,
+                "typeSet", new TypeSet(1),
+                "R0", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("1.5")),
+                "becomeUninfectiousRate", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("1.5")),
+                "samplingProportion", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("0.2")),
+                "removalProb", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("0.9")),
+                "rhoSampling", new TimedParameter(
+                        new RealParameter("0.0 1.5"),
+                        new RealParameter("0.05 0.3"),
+                        origin));
+
+        bdmmprime.flow.BirthDeathMigrationDistribution density = new bdmmprime.flow.BirthDeathMigrationDistribution();
+        density.initByName("parameterization", parameterization,
+                "frequencies", new RealParameter("1.0"),
+                "conditionOnSurvival", true,
+                "tree", tree,
+                "typeLabel", "type"
+        );
+
+        assertEquals(-22.348462265673483 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-5); //Reference value from BDSKY (06/04/2017)
+    }
 }
