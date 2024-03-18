@@ -169,7 +169,7 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
                             ? parameterization.getBirthRates()[startInterval][type1]
                             : parameterization.getCrossBirthRates()[startInterval][type1][type2];
 
-                    conditionDensity += rate*this.frequencies[type1]
+                    conditionDensity += rate * this.frequencies[type1]
                             * (1 - extinctionAtRoot[type1])
                             * (1 - extinctionAtRoot[type2]);
                 }
