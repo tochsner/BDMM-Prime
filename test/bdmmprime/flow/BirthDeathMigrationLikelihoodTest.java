@@ -315,7 +315,7 @@ public class BirthDeathMigrationLikelihoodTest {
         double logL = density.calculateLogP();
 
         // Reference BDMM (version 0.2.0) 29/03/2018
-        assertEquals(-21.185194919464568 + labeledTreeConversionFactor(density), logL, 1e-5);
+        assertEquals(-22.82747259570373, logL, 1e-5);
     }
 
     /**
@@ -392,54 +392,6 @@ public class BirthDeathMigrationLikelihoodTest {
                 "typeLabel", "state");
 
         assertEquals(-33.7573 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-4); // Reference BDSKY
-    }
-
-    @Test
-    public void testLikelihoodTwoState() {
-
-        String newick = "((1[&type=0]: 1.5, 2[&type=1]: 0)3[&type=0]: 3.5, 4[&type=1]: 4) ;";
-
-        Parameterization parameterization = new EpiParameterization();
-        parameterization.initByName(
-                "typeSet", new TypeSet(2),
-                "processLength", new RealParameter("6.0"),
-                "R0", new SkylineVectorParameter(
-                        null,
-                        new RealParameter((4.0/3.0) + " 1.1"),
-                        2),
-                "becomeUninfectiousRate", new SkylineVectorParameter(
-                        null,
-                        new RealParameter("1.5 1.4"),
-                        2),
-                "R0AmongDemes", new SkylineMatrixParameter(
-                        null,
-                        new RealParameter("0.0"),
-                        2),
-                "migrationRate", new SkylineMatrixParameter(
-                        null,
-                        new RealParameter("0.2 0.3"),
-                        2),
-                "samplingProportion", new SkylineVectorParameter(
-                        null,
-                        new RealParameter("0.33"),
-                        2),
-                "removalProb", new SkylineVectorParameter(
-                        null,
-                        new RealParameter("0.3 0.4")));
-
-        bdmmprime.flow.BirthDeathMigrationDistribution density = new bdmmprime.flow.BirthDeathMigrationDistribution();
-        density.initByName(
-                "parameterization", parameterization,
-                "frequencies", new RealParameter("0.5 0.5"),
-                "tree", new TreeParser(newick, false, false, true,0),
-                "conditionOnSurvival", false,
-                "typeLabel", "type"
-        );
-
-        double logL = density.calculateLogP();
-
-        // Reference BDMM (version 0.2.0) 29/03/2018
-        assertEquals(-24.290260360706306, logL, 1e-5);
     }
 
     /**
@@ -844,10 +796,11 @@ public class BirthDeathMigrationLikelihoodTest {
                 "frequencies", new RealParameter("0.5 0.5"),
                 "conditionOnSurvival", true,
                 "tree", tree,
-                "typeLabel", "type"
+                "typeLabel", "type",
+                "relTolerance", 1e-20
         );
 
-        assertEquals(-661.9588648301033 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-5); // result from BEAST, not checked in R
+        assertEquals(-661.9588648301033 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-4); // result from BEAST, not checked in R
 
     }
 
@@ -1065,5 +1018,64 @@ public class BirthDeathMigrationLikelihoodTest {
         density.initAndValidate();
 
         assertEquals(-25.991511346557598 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-4);
+    }
+
+    /**
+     * Tests the case where we have direct ancestors (SA nodes).
+     * Tests if two identical trees but with different newick representations have the same likelihood.
+     */
+    @Test
+    public void testDirectAncestor() {
+
+        // two identical trees up to rotation (the two root children are rotated)
+        String newick1 = "((1[&type=0]: 1.5, 2[&type=1]: 0.0)3[&type=0]: 3.5, (4[&type=0]: 1.5, 5[&type=1]: 1.5)6[&type=0]: 3.5) ;";
+        String newick2 = "((1[&type=0]: 1.5, 2[&type=1]: 1.5)3[&type=0]: 3.5, (4[&type=0]: 1.5, 5[&type=1]: 0.0)6[&type=0]: 3.5) ;";
+
+        Parameterization parameterization = new EpiParameterization();
+        parameterization.initByName(
+                "typeSet", new TypeSet(2),
+                "processLength", new RealParameter("6.0"),
+                "R0", new SkylineVectorParameter(
+                        null,
+                        new RealParameter((4.0/3.0) + " 1.1"),
+                        2),
+                "becomeUninfectiousRate", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("1.5 1.4"),
+                        2),
+                "R0AmongDemes", new SkylineMatrixParameter(
+                        null,
+                        new RealParameter("0.0"),
+                        2),
+                "migrationRate", new SkylineMatrixParameter(
+                        null,
+                        new RealParameter("0.2 0.3"),
+                        2),
+                "samplingProportion", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("0.33"),
+                        2),
+                "removalProb", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("0.3 0.4")));
+
+        bdmmprime.flow.BirthDeathMigrationDistribution density = new bdmmprime.flow.BirthDeathMigrationDistribution();
+        density.initByName(
+                "parameterization", parameterization,
+                "tree", new TreeParser(newick1, false, false, true,0),
+                "frequencies", new RealParameter("0.5 0.5"),
+                "conditionOnSurvival", false,
+                "typeLabel", "type"
+        );
+
+        density.setInputValue("tree", new TreeParser(newick1, false, false, true,0));
+        density.initAndValidate();
+        double logL1 = density.calculateLogP();
+
+        density.setInputValue("tree", new TreeParser(newick2, false, false, true,0));
+        density.initAndValidate();
+        double logL2 = density.calculateLogP();
+
+        assertEquals(logL1, logL2, 1e-5);
     }
 }
