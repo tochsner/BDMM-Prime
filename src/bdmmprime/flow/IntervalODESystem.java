@@ -12,8 +12,8 @@ public abstract class IntervalODESystem implements FirstOrderDifferentialEquatio
     protected Parameterization param;
     protected int interval;
 
-    private final double integrationMinStep;
-    private final double integrationMaxStep;
+    protected final double integrationMinStep;
+    protected final double integrationMaxStep;
 
     public IntervalODESystem(Parameterization parameterization) {
         this.param = parameterization;
@@ -23,52 +23,6 @@ public abstract class IntervalODESystem implements FirstOrderDifferentialEquatio
 
     protected void setInterval(int interval) {
         this.interval = interval;
-    }
-
-    public ContinuousOutputModel integrateOverIntegrals(double[] state, double absoluteTolerance, double relativeTolerance) {
-        return this.integrateOverIntegrals(
-                0, this.param.getTotalProcessLength(), state, absoluteTolerance, relativeTolerance
-        );
-    }
-
-    public ContinuousOutputModel integrateOverIntegrals(
-            double timeStart,
-            double timeEnd,
-            double[] state,
-            double absoluteTolerance,
-            double relativeTolerance
-    ) {
-        if (timeStart > timeEnd) {
-            throw new IllegalArgumentException("timeStart has to be smaller than timeEnd.");
-        }
-
-        FirstOrderIntegrator integrator = new DormandPrince54Integrator(
-                this.integrationMinStep, this.integrationMaxStep, absoluteTolerance, relativeTolerance
-        );
-
-        ContinuousOutputModel result = new ContinuousOutputModel();
-
-        int startInterval = this.param.getIntervalIndex(timeStart);
-        int endInterval = this.param.getIntervalIndex(timeEnd);
-
-        double[] intervalEndTimes = this.param.getIntervalEndTimes();
-
-        for (int interval = startInterval; interval <= endInterval; interval++) {
-            this.setInterval(interval);
-
-            double startTime = interval == startInterval ? timeStart : intervalEndTimes[interval - 1];
-            double endTime = interval == endInterval ? timeEnd : intervalEndTimes[interval];
-
-            ContinuousOutputModel intervalResult = new ContinuousOutputModel();
-            integrator.addStepHandler(intervalResult);
-
-            integrator.integrate(this, startTime, state, endTime, state);
-
-            result.append(intervalResult);
-            integrator.clearStepHandlers();
-        }
-
-        return result;
     }
 
     public ContinuousOutputModel integrateBackwardsOverIntegrals(double[] state, double absoluteTolerance, double relativeTolerance) {
