@@ -1334,8 +1334,7 @@ public class BirthDeathMigrationLikelihoodTest {
                 "frequencies", new RealParameter("1.0"),
                 "conditionOnSurvival", true,
                 "tree", tree,
-                "typeLabel", "type",
-                "parallelize"
+                "typeLabel", "type"
         );
 
         assertEquals(-21.42666177086957 + labeledTreeConversionFactor(density), densityExact.calculateLogP(), 1e-5);

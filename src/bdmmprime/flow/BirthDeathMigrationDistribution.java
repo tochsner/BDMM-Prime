@@ -1,6 +1,7 @@
 package bdmmprime.flow;
 
 import bdmmprime.parameterization.Parameterization;
+import bdmmprime.util.Utils;
 import beast.base.core.Function;
 import beast.base.core.Input;
 import beast.base.evolution.speciation.SpeciesTreeDistribution;
@@ -72,6 +73,7 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
     double relativeTolerance;
 
     int numTypes;
+    boolean[] rhoSampled;
 
     @Override
     public void initAndValidate() {
@@ -113,6 +115,10 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
                     "Error: equilibrium frequencies must add up to 1 but currently add to %f.".formatted(freqSum)
             );
         }
+
+        // initialize helper fields
+
+        this.computeRhoSampledLeafStatus();
     }
 
     @Override
@@ -141,9 +147,9 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
         double conditionDensity = this.calculateConditionDensity(extinctionProbabilities);
         treeLikelihood /= conditionDensity;
 
-        double logTreeLikelihood = Math.log(treeLikelihood);
-
         // convert from oriented to labeled tree likelihood
+
+        double logTreeLikelihood = Math.log(treeLikelihood);
 
         int internalNodeCount = tree.getLeafNodeCount() - ((Tree) tree).getDirectAncestorNodeCount() - 1;
         logTreeLikelihood += Math.log(2) * internalNodeCount - Gamma.logGamma(tree.getLeafNodeCount() + 1);
@@ -174,6 +180,7 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
                             * (1 - extinctionAtRoot[type2]);
                 }
             }
+
         } else if (this.conditionOnSurvival) {
             extinctionProbabilities.setInterpolatedTime(0);
             double[] extinctionAtRoot = extinctionProbabilities.getInterpolatedState();
@@ -181,6 +188,7 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
             for (int type = 0; type < parameterization.getNTypes(); type++) {
                 conditionDensity += this.frequencies[type] * (1 - extinctionAtRoot[type]);
             }
+
         } else {
             conditionDensity = 1.0;
         }
@@ -248,11 +256,15 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
         int nodeType = this.getNodeType(root);
 
         double[] likelihoodEdgeEnd = new double[this.parameterization.getNTypes()];
-        likelihoodEdgeEnd[nodeType] = this.parameterization.getSamplingRates()[intervalEdgeEnd][nodeType] * (
-                this.parameterization.getRemovalProbs()[intervalEdgeEnd][nodeType]
-                        + (1 - this.parameterization.getRemovalProbs()[intervalEdgeEnd][nodeType])
-                        * extinctionProbabilityEdgeEnd[nodeType]
-        );
+        likelihoodEdgeEnd[nodeType] = this.parameterization.getRemovalProbs()[intervalEdgeEnd][nodeType]
+                + (1 - this.parameterization.getRemovalProbs()[intervalEdgeEnd][nodeType])
+                * extinctionProbabilityEdgeEnd[nodeType];
+
+        if (isNodeRhoSampled(root)) {
+            likelihoodEdgeEnd[nodeType] *= this.parameterization.getRhoValues()[intervalEdgeEnd][nodeType];
+        } else { // node is a psi sample
+            likelihoodEdgeEnd[nodeType] *= this.parameterization.getSamplingRates()[intervalEdgeEnd][nodeType];
+        }
 
         return likelihoodEdgeEnd;
     }
@@ -281,9 +293,14 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
         int nodeType = this.getNodeType(directAncestor);
 
         double[] likelihoodEdgeEnd = new double[this.parameterization.getNTypes()];
-        likelihoodEdgeEnd[nodeType] = this.parameterization.getSamplingRates()[intervalEdgeEnd][nodeType]
-                * (1 - this.parameterization.getRemovalProbs()[intervalEdgeEnd][nodeType])
+        likelihoodEdgeEnd[nodeType] = (1 - this.parameterization.getRemovalProbs()[intervalEdgeEnd][nodeType])
                 * likelihoodChild[nodeType];
+
+        if (isNodeRhoSampled(directAncestor)) {
+            likelihoodEdgeEnd[nodeType] *= this.parameterization.getRhoValues()[intervalEdgeEnd][nodeType];
+        } else { // node is a psi sample
+            likelihoodEdgeEnd[nodeType] *= this.parameterization.getSamplingRates()[intervalEdgeEnd][nodeType];
+        }
 
         return likelihoodEdgeEnd;
     }
@@ -334,6 +351,26 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
         }
 
         return likelihoodEdgeEnd;
+    }
+
+    private void computeRhoSampledLeafStatus() {
+        rhoSampled = new boolean[this.tree.getLeafNodeCount()];
+
+        for (int nodeNr = 0; nodeNr < treeInput.get().getLeafNodeCount(); nodeNr++) {
+            double nodeTime = this.parameterization.getNodeTime(this.tree.getNode(nodeNr), this.finalSampleOffset);
+
+            rhoSampled[nodeNr] = false;
+            for (double rhoSamplingTime : this.parameterization.getRhoSamplingTimes()) {
+                if (Utils.equalWithPrecision(nodeTime, rhoSamplingTime)) {
+                    rhoSampled[nodeNr] = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    private boolean isNodeRhoSampled(Node node) {
+        return rhoSampled[node.getNr()];
     }
 
     private int getNodeType(Node node) {
