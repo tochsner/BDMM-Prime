@@ -73,6 +73,8 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
 
     int numTypes;
 
+    double[] logScalingFactors;
+
     @Override
     public void initAndValidate() {
         // unpack input values
@@ -113,6 +115,10 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
                     "Error: equilibrium frequencies must add up to 1 but currently add to %f.".formatted(freqSum)
             );
         }
+
+        // initialize utils needed
+
+        this.logScalingFactors = new double[this.tree.getNodeCount()];
     }
 
     @Override
@@ -128,6 +134,7 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
                 flow,
                 extinctionProbabilities
         );
+        Utils.unscale(rootLikelihoodPerState, -this.logScalingFactors[root.getNr()]);
 
         // get tree likelihood by a weighted average of the root likelihood per state
 
@@ -254,6 +261,8 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
                         * extinctionProbabilityEdgeEnd[nodeType]
         );
 
+        this.logScalingFactors[root.getNr()] = Utils.rescale(likelihoodEdgeEnd);
+
         return likelihoodEdgeEnd;
     }
 
@@ -284,6 +293,8 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
         likelihoodEdgeEnd[nodeType] = this.parameterization.getSamplingRates()[intervalEdgeEnd][nodeType]
                 * (1 - this.parameterization.getRemovalProbs()[intervalEdgeEnd][nodeType])
                 * likelihoodChild[nodeType];
+
+        this.logScalingFactors[root.getNr()] = Utils.rescale(likelihoodEdgeEnd, this.logScalingFactors[child.getNr()]);
 
         return likelihoodEdgeEnd;
     }
@@ -332,6 +343,11 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
                 );
             }
         }
+
+        this.logScalingFactors[root.getNr()] = Utils.rescale(
+                likelihoodEdgeEnd,
+                this.logScalingFactors[child1.getNr()] + this.logScalingFactors[child2.getNr()]
+        );
 
         return likelihoodEdgeEnd;
     }
