@@ -32,8 +32,8 @@ public class FlowODESystem extends IntervalODESystem {
                 system.addToEntry(
                         i,
                         j,
-                        this.param.getMigRates()[interval][i][j]
-                                + this.param.getCrossBirthRates()[interval][i][j] * extinctProbabilities[i]
+                        -this.param.getMigRates()[interval][i][j]
+                                - this.param.getCrossBirthRates()[interval][i][j] * extinctProbabilities[i]
                 );
             }
         }
@@ -44,29 +44,29 @@ public class FlowODESystem extends IntervalODESystem {
             system.addToEntry(
                     i,
                     i,
-                    -this.param.getDeathRates()[interval][i] - this.param.getSamplingRates()[interval][i]
+                    this.param.getDeathRates()[interval][i] + this.param.getSamplingRates()[interval][i]
             );
             system.addToEntry(
                     i,
                     i,
-                    this.param.getBirthRates()[interval][i] * (2 * extinctProbabilities[i] - 1)
+                    -this.param.getBirthRates()[interval][i] * (2 * extinctProbabilities[i] - 1)
             );
 
             for (int j = 0; j < param.getNTypes(); j++) {
                 system.addToEntry(
                         i,
                         i,
-                        -this.param.getMigRates()[interval][i][j]
+                        this.param.getMigRates()[interval][i][j]
                 );
                 system.addToEntry(
                         i,
                         i,
-                        this.param.getCrossBirthRates()[interval][i][j] * (extinctProbabilities[j] - 1)
+                        -this.param.getCrossBirthRates()[interval][i][j] * (extinctProbabilities[j] - 1)
                 );
             }
         }
 
-        return system.scalarMultiply(-1.0);
+        return system;
     }
 
     @Override
@@ -102,11 +102,6 @@ public class FlowODESystem extends IntervalODESystem {
         RealVector solution = linearSolver.solve(likelihoodVectorEnd);
 
         RealVector likelihoodVectorStart = flowMatrixStart.operate(solution);
-
-        System.out.println();
-        System.out.printf("Edge at %f to %f %n", timeStart, timeEnd);
-        System.out.println("State before " + likelihoodVectorEnd);
-        System.out.println("State after " + likelihoodVectorStart);
 
         return likelihoodVectorStart.toArray();
     }
