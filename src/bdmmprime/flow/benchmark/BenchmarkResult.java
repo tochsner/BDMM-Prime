@@ -28,6 +28,7 @@ public class BenchmarkResult {
         joiner.add(Integer.toString(this.tree.getLeafNodeCount()));
 
         joiner.add(Integer.toString(this.parameterization.getNTypes()));
+        joiner.add(Double.toString(this.parameterization.getTotalProcessLength()));
 
         joiner.add(Double.toString(this.flowRun.likelihood));
         joiner.add(Long.toString(this.flowRun.duration));
@@ -45,6 +46,7 @@ public class BenchmarkResult {
         joiner.add("leaf_count");
 
         joiner.add("types_count");
+        joiner.add("process_length");
 
         joiner.add("flow_likelihood");
         joiner.add("flow_duration");
