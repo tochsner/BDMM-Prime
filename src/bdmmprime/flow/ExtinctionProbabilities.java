@@ -4,14 +4,11 @@ import org.apache.commons.math3.linear.MatrixUtils;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.ode.ContinuousOutputModel;
 
-public class Flow {
+public class ExtinctionProbabilities {
     ContinuousOutputModel[] outputModels;
     double[] endTimes;
-    RealMatrix[] initialFlows;
 
-    int n;
-
-    public Flow(ContinuousOutputModel[] flows, double[] endTimes, int n) {
+    public ExtinctionProbabilities(ContinuousOutputModel[] flows, double[] endTimes) {
         // test if array length match
 
         if (flows.length != endTimes.length) {
@@ -26,36 +23,22 @@ public class Flow {
             }
         }
 
-
-        this.n = n;
         this.outputModels = flows;
         this.endTimes = endTimes;
-
-        this.initialFlows = new RealMatrix[this.outputModels.length];
-
-        this.initialFlows[0] = MatrixUtils.createRealIdentityMatrix(this.n);
-
-        for (int i = 1; i < this.initialFlows.length; i++) {
-            RealMatrix flowEnd = this.getFlow(this.outputModels[i - 1], this.endTimes[i - 1]);
-            this.initialFlows[i] = flowEnd.multiply(this.initialFlows[i - 1]);
-        }
     }
 
-    protected RealMatrix getFlow(ContinuousOutputModel output, double time) {
+    protected double[] getExtinctionProbability(ContinuousOutputModel output, double time) {
         output.setInterpolatedTime(time);
-        double[] flow = output.getInterpolatedState();
-        return Utils.toMatrix(flow, this.n);
+        return output.getInterpolatedState();
     }
 
-    public RealMatrix getFlow(double time) {
+    public double[] getExtinctionProbability(double time) {
         for (int i = 0; i < this.outputModels.length; i++) {
             if (time <= this.endTimes[i]) {
-                return this.getFlow(this.outputModels[i], time).multiply(this.initialFlows[i]);
+                return this.getExtinctionProbability(this.outputModels[i], time);
             }
         }
 
-        return this.initialFlows[this.initialFlows.length - 1].multiply(
-                this.getFlow(this.outputModels[this.initialFlows.length - 1], time)
-        );
+        return this.getExtinctionProbability(this.outputModels[this.outputModels.length - 1], time);
     }
 }

@@ -10,8 +10,12 @@ import beast.base.evolution.tree.TreeInterface;
 import beast.base.inference.parameter.RealParameter;
 import org.apache.commons.math.special.Gamma;
 import org.apache.commons.math3.ode.ContinuousOutputModel;
+import org.apache.commons.math3.ode.FirstOrderIntegrator;
+import org.apache.commons.math3.ode.nonstiff.DormandPrince54Integrator;
+
 
 import java.util.Arrays;
+import java.util.stream.IntStream;
 
 public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
 
@@ -123,8 +127,8 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
 
     @Override
     public double calculateTreeLogLikelihood(TreeInterface dummyTree) {
-        ContinuousOutputModel extinctionProbabilities = this.calculateExtinctionProbabilities();
-        ContinuousOutputModel flow = this.calculateFlow(extinctionProbabilities);
+        ExtinctionProbabilities extinctionProbabilities = this.calculateExtinctionProbabilities(8);
+        Flow flow = this.calculateFlow(extinctionProbabilities, 8);
 
         Node root = this.tree.getRoot();
         double[] rootLikelihoodPerState = this.calculateSubTreeLikelihood(
@@ -157,15 +161,14 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
         return logTreeLikelihood;
     }
 
-    private double calculateConditionDensity(ContinuousOutputModel extinctionProbabilities) {
+    private double calculateConditionDensity(ExtinctionProbabilities extinctionProbabilities) {
         // see Tanja Stadler, How Can We Improve Accuracy of Macroevolutionary Rate Estimates?,
         // Systematic Biology, Volume 62, Issue 2, March 2013, Pages 321–329,
         // https://doi.org/10.1093/sysbio/sys073
         double conditionDensity = 0.0;
 
         if (this.conditionOnRoot) {
-            extinctionProbabilities.setInterpolatedTime(0);
-            double[] extinctionAtRoot = extinctionProbabilities.getInterpolatedState();
+            double[] extinctionAtRoot = extinctionProbabilities.getExtinctionProbability(0);
 
             int startInterval = this.parameterization.getIntervalIndex(0);
 
@@ -181,8 +184,7 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
                 }
             }
         } else if (this.conditionOnSurvival) {
-            extinctionProbabilities.setInterpolatedTime(0);
-            double[] extinctionAtRoot = extinctionProbabilities.getInterpolatedState();
+            double[] extinctionAtRoot = extinctionProbabilities.getExtinctionProbability(0);
 
             for (int type = 0; type < parameterization.getNTypes(); type++) {
                 conditionDensity += this.frequencies[type] * (1 - extinctionAtRoot[type]);
@@ -194,33 +196,67 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
         return conditionDensity;
     }
 
-    private ContinuousOutputModel calculateExtinctionProbabilities() {
+    private ExtinctionProbabilities calculateExtinctionProbabilities(int numIntervals) {
         IntervalODESystem system = new ExtinctionODESystem(this.parameterization);
 
-        double[] initialState = new double[this.parameterization.getNTypes()];
-        Arrays.fill(initialState, 1.0);
+        double[] state = new double[this.parameterization.getNTypes()];
+        Arrays.fill(state, 1.0);
 
-        return system.integrateBackwardsOverIntegrals(initialState, this.absoluteTolerance, this.relativeTolerance);
-    }
+        ContinuousOutputModel[] outputModels = new ContinuousOutputModel[numIntervals];
+        double[] endTimes = new double[numIntervals];
 
-    private ContinuousOutputModel calculateFlow(ContinuousOutputModel extinctionProbabilities) {
-        FlowODESystem system = new FlowODESystem(this.parameterization, extinctionProbabilities);
+        double intervalSize = this.parameterization.getTotalProcessLength() / numIntervals;
 
-        double[] initialState = new double[this.parameterization.getNTypes() * this.parameterization.getNTypes()];
-        for (int i = 0; i < this.parameterization.getNTypes(); i++) {
-            // fill diagonal entries with 1 to get the identity matrix
-            initialState[i * this.parameterization.getNTypes() + i] = 1;
+        for (int i = numIntervals - 1; 0 <= i; i--) {
+            double startTime = i * intervalSize;
+            double endTime = (i + 1) * intervalSize;
+
+            outputModels[i] = system.integrateOverIntegrals(
+                    endTime, startTime, state, this.absoluteTolerance, this.relativeTolerance
+            );
+            endTimes[i] = endTime;
         }
 
-        return system.integrateBackwardsOverIntegrals(initialState, this.absoluteTolerance, this.relativeTolerance);
+        return new ExtinctionProbabilities(outputModels, endTimes);
+    }
+
+    private Flow calculateFlow(ExtinctionProbabilities extinctionProbabilities, int numIntervals) {
+        double intervalSize = this.parameterization.getTotalProcessLength() / numIntervals;
+
+        ContinuousOutputModel[] outputModels;
+        double[] endTimes;
+
+        double[] initialState = new double[this.numTypes * this.numTypes];
+        for (int j = 0; j < this.parameterization.getNTypes(); j++) {
+            // fill diagonal entries with 1 to get the identity matrix
+            initialState[j * this.parameterization.getNTypes() + j] = 1;
+        }
+
+        outputModels = IntStream
+                .range(0, numIntervals)
+                .boxed()
+                .parallel()
+                .map(i -> new FlowODESystem(this.parameterization, extinctionProbabilities)
+                        .integrateOverIntegrals(
+                                i * intervalSize, (i + 1) * intervalSize, initialState.clone(), this.absoluteTolerance, this.relativeTolerance
+                        )
+                )
+                .toArray(ContinuousOutputModel[]::new);
+
+        endTimes = IntStream
+                .range(0, numIntervals)
+                .mapToDouble(i -> (i + 1) * intervalSize)
+                .toArray();
+
+        return new Flow(outputModels, endTimes, this.numTypes);
     }
 
     private double[] calculateSubTreeLikelihood(
             Node root,
             double timeEdgeStart,
             double timeEdgeEnd,
-            ContinuousOutputModel flow,
-            ContinuousOutputModel extinctionProbabilities
+            Flow flow,
+            ExtinctionProbabilities extinctionProbabilities
     ) {
         double[] likelihoodEdgeEnd;
 
@@ -243,13 +279,11 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
     private double[] calculateLeafLikelihood(
             Node root,
             double timeEdgeEnd,
-            ContinuousOutputModel extinctionProbabilities
+            ExtinctionProbabilities extinctionProbabilities
     ) {
 
         int intervalEdgeEnd = this.parameterization.getIntervalIndex(timeEdgeEnd);
-
-        extinctionProbabilities.setInterpolatedTime(timeEdgeEnd);
-        double[] extinctionProbabilityEdgeEnd = extinctionProbabilities.getInterpolatedState();
+        double[] extinctionProbabilityEdgeEnd = extinctionProbabilities.getExtinctionProbability(timeEdgeEnd);
 
         int nodeType = this.getNodeType(root);
 
@@ -268,8 +302,8 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
     private double[] calculateDirectAncestorWithChildLikelihood(
             Node root,
             double timeEdgeEnd,
-            ContinuousOutputModel flow,
-            ContinuousOutputModel extinctionProbabilities
+            Flow flow,
+            ExtinctionProbabilities extinctionProbabilities
     ) {
         int intervalEdgeEnd = this.parameterization.getIntervalIndex(timeEdgeEnd);
 
@@ -301,8 +335,8 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
     private double[] calculateInternalEdgeLikelihood(
             Node root,
             double timeEdgeEnd,
-            ContinuousOutputModel flow,
-            ContinuousOutputModel extinctionProbabilities
+            Flow flow,
+            ExtinctionProbabilities extinctionProbabilities
     ) {
         int intervalEdgeEnd = this.parameterization.getIntervalIndex(timeEdgeEnd);
 

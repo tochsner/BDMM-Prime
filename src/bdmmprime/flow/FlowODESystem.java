@@ -7,9 +7,9 @@ import org.apache.commons.math3.ode.ContinuousOutputModel;
 import java.util.Arrays;
 
 public class FlowODESystem extends IntervalODESystem {
-    private final ContinuousOutputModel extinctionProbabilities;
+    private final ExtinctionProbabilities extinctionProbabilities;
 
-    public FlowODESystem(Parameterization parameterization, ContinuousOutputModel extinctionProbabilities) {
+    public FlowODESystem(Parameterization parameterization, ExtinctionProbabilities extinctionProbabilities) {
         super(parameterization);
         this.extinctionProbabilities = extinctionProbabilities;
     }
@@ -23,9 +23,7 @@ public class FlowODESystem extends IntervalODESystem {
         RealMatrix system = new BlockRealMatrix(param.getNTypes(), param.getNTypes());
 
         int interval = this.param.getIntervalIndex(t);
-
-        this.extinctionProbabilities.setInterpolatedTime(t);
-        double[] extinctProbabilities = this.extinctionProbabilities.getInterpolatedState();
+        double[] extinctProbabilities = this.extinctionProbabilities.getExtinctionProbability(t);
 
         // fill transitions
 
@@ -86,17 +84,10 @@ public class FlowODESystem extends IntervalODESystem {
             double timeStart,
             double timeEnd,
             double[] initialState,
-            ContinuousOutputModel flow
+            Flow flow
     ) {
-        int n = initialState.length;
-
-        flow.setInterpolatedTime(timeStart);
-        double[] flowStart = flow.getInterpolatedState();
-        RealMatrix flowMatrixStart = Utils.toMatrix(flowStart, n);
-
-        flow.setInterpolatedTime(timeEnd);
-        double[] flowEnd = flow.getInterpolatedState();
-        RealMatrix flowMatrixEnd = Utils.toMatrix(flowEnd, n);
+        RealMatrix flowMatrixStart = flow.getFlow(timeStart);
+        RealMatrix flowMatrixEnd = flow.getFlow(timeEnd);
 
         RealVector likelihoodVectorEnd = Utils.toVector(initialState);
 

@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 public class FlowODESystemIsolatedTest {
 
     static class NormalFlowODESystem extends FlowODESystem {
-        public NormalFlowODESystem(Parameterization parameterization, ContinuousOutputModel extinctionProbabilities) {
+        public NormalFlowODESystem(Parameterization parameterization, ExtinctionProbabilities extinctionProbabilities) {
             super(parameterization, extinctionProbabilities);
         }
 
@@ -66,7 +66,8 @@ public class FlowODESystemIsolatedTest {
         // integrate using flow
 
         FirstOrderDifferentialEquations flowSystem = new NormalFlowODESystem(
-                parameterization, extinctionProbabilities
+                parameterization,
+                new ExtinctionProbabilities(new ContinuousOutputModel[] {extinctionProbabilities}, new double[] {parameterization.getTotalProcessLength()})
         );
         double[] flowIntegral = new double[2];
         integrator.integrate(flowSystem, endTime, initialState.clone(), startTime, flowIntegral);

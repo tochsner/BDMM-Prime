@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.*;
 public class FlowODESystemTest {
 
     static class NormalFlowODESystem extends FlowODESystem {
-        public NormalFlowODESystem(Parameterization parameterization, ContinuousOutputModel extinctionProbabilities) {
+        public NormalFlowODESystem(Parameterization parameterization, ExtinctionProbabilities extinctionProbabilities) {
             super(parameterization, extinctionProbabilities);
         }
 
@@ -55,7 +55,10 @@ public class FlowODESystemTest {
 
         // integrate using flow
 
-        FlowODESystem flowSystem = new FlowODESystem(parameterization, extinctionProbabilities);
+        FlowODESystem flowSystem = new FlowODESystem(
+                parameterization,
+                new ExtinctionProbabilities(new ContinuousOutputModel[] {extinctionProbabilities}, new double[] {parameterization.getTotalProcessLength()})
+        );
 
         double[] initialFlowState = new double[parameterization.getNTypes() * parameterization.getNTypes()];
         for (int i = 0; i < parameterization.getNTypes(); i++) {
@@ -63,14 +66,19 @@ public class FlowODESystemTest {
             initialFlowState[i * parameterization.getNTypes() + i] = 1.0;
         }
 
-        ContinuousOutputModel flow = flowSystem.integrateOverIntegrals(
+        ContinuousOutputModel output = flowSystem.integrateOverIntegrals(
                 initialFlowState, 1e-100, 1e-20
         );
+        Flow flow = new Flow(new ContinuousOutputModel[] {output}, new double[] {parameterization.getTotalProcessLength()}, parameterization.getNTypes());
+
         double[] flowIntegral = FlowODESystem.integrateUsingFlow(startTime, endTime, initialState.clone(), flow);
 
         // integrate using normal integration method
 
-        NormalFlowODESystem normalSystem = new NormalFlowODESystem(parameterization, extinctionProbabilities);
+        NormalFlowODESystem normalSystem = new NormalFlowODESystem(
+                parameterization,
+                new ExtinctionProbabilities(new ContinuousOutputModel[] {extinctionProbabilities}, new double[] {parameterization.getTotalProcessLength()})
+        );
         ContinuousOutputModel normalOutput = normalSystem.integrateOverIntegrals(
                 startTime, endTime, initialState.clone(), 1e-100, 1e-20
         );
@@ -126,7 +134,10 @@ public class FlowODESystemTest {
 
         // get flow ODE derivatives
 
-        FlowODESystem flowSystem = new NormalFlowODESystem(parameterization, extinctionProbabilities);
+        FlowODESystem flowSystem = new NormalFlowODESystem(
+                parameterization,
+                new ExtinctionProbabilities(new ContinuousOutputModel[] {extinctionProbabilities}, new double[] {parameterization.getTotalProcessLength()})
+        );
         double[] flowDerivatives = new double[initialState.length];
         flowSystem.computeDerivatives(t, initialState.clone(), flowDerivatives);
 

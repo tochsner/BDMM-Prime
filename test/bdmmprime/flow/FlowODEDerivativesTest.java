@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 public class FlowODEDerivativesTest {
 
     static class NormalFlowODESystem extends FlowODESystem {
-        public NormalFlowODESystem(Parameterization parameterization, ContinuousOutputModel extinctionProbabilities) {
+        public NormalFlowODESystem(Parameterization parameterization, ExtinctionProbabilities extinctionProbabilities) {
             super(parameterization, extinctionProbabilities);
         }
 
@@ -55,7 +55,10 @@ public class FlowODEDerivativesTest {
 
         // get flow ODE derivatives
 
-        FlowODESystem flowSystem = new NormalFlowODESystem(parameterization, extinctionProbabilities);
+        FlowODESystem flowSystem = new NormalFlowODESystem(
+                parameterization,
+                new ExtinctionProbabilities(new ContinuousOutputModel[] {extinctionProbabilities}, new double[] {parameterization.getTotalProcessLength()})
+        );
         double[] flowDerivatives = new double[initialState.length];
         flowSystem.computeDerivatives(t, initialState.clone(), flowDerivatives);
 
