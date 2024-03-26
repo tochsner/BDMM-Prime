@@ -17,7 +17,7 @@ public class Benchmark {
     public static void main(String[] args) {
         Randomizer.setSeed(2);
 
-        int NUM_TIMES = 100000;
+        int NUM_TIMES = 5000;
 
         ParameterizationSampler sampler = new ParameterizationSampler();
 
