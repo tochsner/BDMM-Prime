@@ -17,7 +17,7 @@ public class Benchmark {
     public static void main(String[] args) {
         Randomizer.setSeed(2);
 
-        int NUM_TIMES = 500;
+        int NUM_TIMES = 100000;
 
         ParameterizationSampler sampler = new ParameterizationSampler();
 
@@ -39,8 +39,13 @@ public class Benchmark {
 
                 BenchmarkResult result = new BenchmarkResult(parameterization, tree, flowRun, bdmmRun);
                 results.add(result);
-            } catch (Exception exception) {
-                continue;
+            } catch (IllegalStateException ignored) {
+
+            }
+
+            if (i % 100 == 0) {
+                System.out.println(i);
+                writeResults(results, "results.csv");
             }
         }
 

@@ -66,7 +66,7 @@ public class TypeSet extends BEASTObject {
             addTypesFromTypeTraitSet(typeTraitSetInput.get());
 
         // Report type<->index map
-        Log.info("TypeSet " + getID() + ":");
+//        Log.info("TypeSet " + getID() + ":");
         for (int i=0; i<getNTypes(); i++)
             Log.info("\t" + getTypeName(i) + " (" + i + ")");
     }

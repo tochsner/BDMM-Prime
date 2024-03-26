@@ -574,13 +574,7 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
             node.setMetaData("interval", String.valueOf(intervalIdx));
         }
 
-        System.out.println();
-        System.out.printf("Edge at %f to %f %n", tTop, tBottom);
-        System.out.println("State before " + Arrays.toString(state.ge));
-
         integrateP0Ge(node, tTop, state, system);
-
-        System.out.println("State after " + Arrays.toString(state.ge));
 
         if (debug)
             debugMessage("State at top of edge: " + state + "\n", depth);

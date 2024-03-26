@@ -134,7 +134,6 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
                 flow,
                 extinctionProbabilities
         );
-        Utils.unscale(rootLikelihoodPerState, -this.logScalingFactors[root.getNr()]);
 
         // get tree likelihood by a weighted average of the root likelihood per state
 
@@ -148,7 +147,7 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
         double conditionDensity = this.calculateConditionDensity(extinctionProbabilities);
         treeLikelihood /= conditionDensity;
 
-        double logTreeLikelihood = Math.log(treeLikelihood);
+        double logTreeLikelihood = Math.log(treeLikelihood) + this.logScalingFactors[root.getNr()];
 
         // convert from oriented to labeled tree likelihood
 
