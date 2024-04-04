@@ -15,9 +15,9 @@ import java.util.List;
 public class Benchmark {
 
     public static void main(String[] args) {
-        Randomizer.setSeed(2);
+        Randomizer.setSeed(1);
 
-        int NUM_TIMES = 5000;
+        int NUM_TIMES = 30000;
 
         ParameterizationSampler sampler = new ParameterizationSampler();
 
@@ -52,7 +52,7 @@ public class Benchmark {
         return results;
     }
 
-    static Tree simulateTree(Parameterization parameterization, RealParameter frequencies) {
+    static Tree simulateTree(Parameterization parameterization, RealParameter frequencies) throws IllegalStateException {
         SimulatedTree simulatedTree = new SimulatedTree();
         simulatedTree.initByName(
                 "parameterization", parameterization,
