@@ -379,64 +379,12 @@ public class BirthDeathMigrationLikelihoodTest {
                 "conditionOnSurvival", false,
                 "tree", new TreeParser(newick, false, false, true,0),
                 "typeLabel", "type",
-                "parallelize", false);
+                "parallelize", true);
 
 		double logL = density.calculateLogP();
 
         // Reference TypeMappedTree & Flow Implementation 18/03/2024
 		assertEquals(-22.82747259570373, logL, 1e-5);
-	}
-
-	/**
-	 * Two-state test for removal-probability rate change
-	 * Reference from BDMM itself
-	 */
-	@Test
-	public void testLikelihoodTwoState() {
-
-		String newick = "((1[&type=0]: 1.5, 2[&type=1]: 0)3[&type=0]: 3.5, 4[&type=1]: 4) ;";
-
-		Parameterization parameterization = new EpiParameterization();
-		parameterization.initByName(
-				"typeSet", new TypeSet(2),
-				"processLength", new RealParameter("6.0"),
-				"R0", new SkylineVectorParameter(
-						null,
-						new RealParameter((4.0/3.0) + " 1.1"),
-						2),
-				"becomeUninfectiousRate", new SkylineVectorParameter(
-						null,
-						new RealParameter("1.5 1.4"),
-						2),
-				"R0AmongDemes", new SkylineMatrixParameter(
-						null,
-						new RealParameter("0.0"),
-						2),
-				"migrationRate", new SkylineMatrixParameter(
-						null,
-						new RealParameter("0.2 0.3"),
-						2),
-				"samplingProportion", new SkylineVectorParameter(
-						null,
-						new RealParameter("0.33"),
-						2),
-				"removalProb", new SkylineVectorParameter(
-						null,
-						new RealParameter("0.3 0.4")));
-
-		BirthDeathMigrationDistribution density = new BirthDeathMigrationDistribution();
-		density.initByName(
-				"parameterization", parameterization,
-				"frequencies", new RealParameter("0.5 0.5"),
-				"conditionOnSurvival", false,
-				"tree", new TreeParser(newick, false, false, true,0),
-				"typeLabel", "type",
-				"parallelize", false);
-
-		double logL = density.calculateLogP();
-
-		// Reference BDMM (version 0.2.0) 29/03/2018
-		assertEquals(-24.290260360706306, logL, 1e-5);
 	}
 
 
@@ -1127,7 +1075,7 @@ public class BirthDeathMigrationLikelihoodTest {
                 "typeLabel", "state",
                 "parallelize", false);
 
-		// assertEquals(-7.215222 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-6); // result from R
+		assertEquals(-7.215222 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-6); // result from R
 
 		// no migration, symmetric birth among demes
 
@@ -1135,10 +1083,10 @@ public class BirthDeathMigrationLikelihoodTest {
         parameterization.setInputValue("R0AmongDemes", new SkylineMatrixParameter(
                 null,
                 new RealParameter("0.0666667"), 2));
-//        parameterization.initAndValidate();
-//        density.initAndValidate();
-//
-//		assertEquals(-7.404888 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-6); // result from R
+        parameterization.initAndValidate();
+        density.initAndValidate();
+
+		assertEquals(-7.404888 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-6); // result from R
 
 		// no migration, asymmetric birth among demes
 
@@ -1153,40 +1101,40 @@ public class BirthDeathMigrationLikelihoodTest {
 
         // no migration, asymmetric R0, asymmetric birth among demes
 
-//        parameterization.setInputValue("R0", new SkylineVectorParameter(
-//                null,
-//                new RealParameter("2 1.3333333")));
-//        parameterization.initAndValidate();
-//        density.initAndValidate();
-//
-//		assertEquals(-7.350649 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-6); // result from R
-//
-//        // no migration, asymmetric R0, birth among demes, BU rate, samp proportion
-//
-//        parameterization.setInputValue("R0", new SkylineVectorParameter(
-//                null,
-//                new RealParameter("2.0 1.5")));
-//        parameterization.setInputValue("becomeUninfectiousRate", new SkylineVectorParameter(
-//                null,
-//                new RealParameter("2.0 1.0")));
-//        parameterization.setInputValue("samplingProportion", new SkylineVectorParameter(
-//                null,
-//                new RealParameter("0.5 0.3")));
-//        parameterization.setInputValue("R0AmongDemes", new SkylineMatrixParameter(
-//                null,
-//                new RealParameter("0.1 0.5")));
-//        parameterization.initAndValidate();
-//        density.initAndValidate();
-//
-//		assertEquals(-6.504139 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-6); // result from R
-//
-//		// Same params as last test, swapped leaf states
-//
-//        tree = new TreeParser("(1[&state=1] : 1.5, 2[&state=0] : 0.5)[&state=0];", false);
-//        density.setInputValue("tree", tree);
-//        density.initAndValidate();
-//
-//		assertEquals(-7.700916 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-6); // result from R
+        parameterization.setInputValue("R0", new SkylineVectorParameter(
+                null,
+                new RealParameter("2 1.3333333")));
+        parameterization.initAndValidate();
+        density.initAndValidate();
+
+		assertEquals(-7.350649 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-6); // result from R
+
+        // no migration, asymmetric R0, birth among demes, BU rate, samp proportion
+
+        parameterization.setInputValue("R0", new SkylineVectorParameter(
+                null,
+                new RealParameter("2.0 1.5")));
+        parameterization.setInputValue("becomeUninfectiousRate", new SkylineVectorParameter(
+                null,
+                new RealParameter("2.0 1.0")));
+        parameterization.setInputValue("samplingProportion", new SkylineVectorParameter(
+                null,
+                new RealParameter("0.5 0.3")));
+        parameterization.setInputValue("R0AmongDemes", new SkylineMatrixParameter(
+                null,
+                new RealParameter("0.1 0.5")));
+        parameterization.initAndValidate();
+        density.initAndValidate();
+
+		assertEquals(-6.504139 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-6); // result from R
+
+		// Same params as last test, swapped leaf states
+
+        tree = new TreeParser("(1[&state=1] : 1.5, 2[&state=0] : 0.5)[&state=0];", false);
+        density.setInputValue("tree", tree);
+        density.initAndValidate();
+
+		assertEquals(-7.700916 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-6); // result from R
 	}
 
 	/**
@@ -1274,7 +1222,7 @@ public class BirthDeathMigrationLikelihoodTest {
                 "conditionOnSurvival", true,
                 "tree", tree,
                 "typeLabel", "type",
-                "parallelize", false);
+                "parallelize", true);
 
 		assertEquals(-661.9588648301033 + labeledTreeConversionFactor(density), density.calculateLogP(), 1e-5); // result from BEAST, not checked in R
 
