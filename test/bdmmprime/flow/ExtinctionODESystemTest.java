@@ -26,12 +26,13 @@ public class ExtinctionODESystemTest {
         double[] initialState = new double[parameterization.getNTypes()];
         Arrays.fill(initialState, 1.0);
 
-        IntervalODESystem extinctionSystem = new ExtinctionODESystem(parameterization);
-        ContinuousOutputModel extinctionProbabilities = extinctionSystem.integrateBackwardsOverIntegrals(
-                initialState.clone(), 1e-100, 1e-20
+        IntervalODESystem extinctionSystem = new ExtinctionODESystem(parameterization, 1e-100, 1e-20);
+        ContinuousOutputModel[] extinctionProbabilities = extinctionSystem.integrateBackwardsOverIntegrals(
+                initialState.clone()
         );
-        extinctionProbabilities.setInterpolatedTime(endTime);
-        double[] flowIntegral = extinctionProbabilities.getInterpolatedState();
+        int intervalEndTime = parameterization.getIntervalIndex(endTime);
+        extinctionProbabilities[intervalEndTime].setInterpolatedTime(endTime);
+        double[] flowIntegral = extinctionProbabilities[intervalEndTime].getInterpolatedState();
 
         // setup extinction ODE in the distribution package
 
@@ -66,7 +67,7 @@ public class ExtinctionODESystemTest {
     ) {
         // setup extinction ODE
 
-        IntervalODESystem extinctionSystem = new ExtinctionODESystem(parameterization);
+        IntervalODESystem extinctionSystem = new ExtinctionODESystem(parameterization, 1e-100, 1e-20);
 
         // get flow ODE derivatives
 

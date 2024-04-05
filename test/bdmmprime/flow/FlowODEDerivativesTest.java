@@ -20,8 +20,8 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 public class FlowODEDerivativesTest {
 
     static class NormalFlowODESystem extends FlowODESystem {
-        public NormalFlowODESystem(Parameterization parameterization, ContinuousOutputModel extinctionProbabilities) {
-            super(parameterization, extinctionProbabilities);
+        public NormalFlowODESystem(Parameterization parameterization, ContinuousOutputModel[] extinctionProbabilities) {
+            super(parameterization, extinctionProbabilities, 1e-100, 1e-7);
         }
 
         @Override
@@ -44,13 +44,13 @@ public class FlowODEDerivativesTest {
     ) {
         // setup extinction ODE
 
-        IntervalODESystem extinctionSystem = new ExtinctionODESystem(parameterization);
+        IntervalODESystem extinctionSystem = new ExtinctionODESystem(parameterization, 1e-100, 1e-7);
 
         double[] initialExtinctionState = new double[parameterization.getNTypes()];
         Arrays.fill(initialExtinctionState, 1.0);
 
-        ContinuousOutputModel extinctionProbabilities = extinctionSystem.integrateBackwardsOverIntegrals(
-                initialExtinctionState, 1e-100, 1e-20
+        ContinuousOutputModel[] extinctionProbabilities = extinctionSystem.integrateBackwardsOverIntegrals(
+                initialExtinctionState
         );
 
         // get flow ODE derivatives
@@ -63,8 +63,9 @@ public class FlowODEDerivativesTest {
 
         P0GeSystem oldSystem = new P0GeSystem(parameterization, 1e-100, 1e-20);
 
-        extinctionProbabilities.setInterpolatedTime(t);
-        double[] startExtinction = extinctionProbabilities.getInterpolatedState();
+        int interval = parameterization.getIntervalIndex(t);
+        extinctionProbabilities[interval].setInterpolatedTime(t);
+        double[] startExtinction = extinctionProbabilities[interval].getInterpolatedState();
         double[] oldInitialState = new double[]{
                 startExtinction[0],
                 startExtinction[1],

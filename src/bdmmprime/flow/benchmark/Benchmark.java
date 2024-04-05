@@ -39,8 +39,7 @@ public class Benchmark {
 
                 BenchmarkResult result = new BenchmarkResult(parameterization, tree, flowRun, bdmmRun);
                 results.add(result);
-            } catch (IllegalStateException ignored) {
-
+            } catch (RuntimeException ignored) {
             }
 
             if (i % 100 == 0) {

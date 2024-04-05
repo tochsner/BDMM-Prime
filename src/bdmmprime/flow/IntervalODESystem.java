@@ -1,6 +1,7 @@
 package bdmmprime.flow;
 
 import bdmmprime.parameterization.Parameterization;
+import bdmmprime.util.Utils;
 import org.apache.commons.math3.ode.ContinuousOutputModel;
 import org.apache.commons.math3.ode.FirstOrderDifferentialEquations;
 import org.apache.commons.math3.ode.FirstOrderIntegrator;
@@ -8,84 +9,50 @@ import org.apache.commons.math3.ode.events.EventHandler;
 import org.apache.commons.math3.ode.nonstiff.*;
 
 
-public abstract class IntervalODESystem implements FirstOrderDifferentialEquations, EventHandler {
+public abstract class IntervalODESystem implements FirstOrderDifferentialEquations {
 
     protected Parameterization param;
     protected int interval;
 
-    private final double integrationMinStep;
-    private final double integrationMaxStep;
+    protected FirstOrderIntegrator integrator;
 
-    private final int MIN_RATE_CHANGE_NUM_CHECKS = 10;
-    private final double RATE_CHANGE_CHECK_CONVERGENCE = 1e-5;
-    private final int RATE_CHANGE_MAX_ITERATIONS = 100;
-
-    public IntervalODESystem(Parameterization parameterization) {
+    public IntervalODESystem(Parameterization parameterization, double absoluteTolerance, double relativeTolerance) {
         this.param = parameterization;
-        this.integrationMinStep = this.param.getTotalProcessLength() * 1e-100;
-        this.integrationMaxStep = this.param.getTotalProcessLength() / 20;
-    }
-
-    public ContinuousOutputModel integrateOverIntegrals(double[] state, double absoluteTolerance, double relativeTolerance) {
-        return this.integrateOverIntegrals(
-                0, this.param.getTotalProcessLength(), state, absoluteTolerance, relativeTolerance
+        double integrationMinStep = this.param.getTotalProcessLength() * 1e-100;
+        double integrationMaxStep = this.param.getTotalProcessLength() / 20;
+        this.integrator = new DormandPrince853Integrator(
+                integrationMinStep, integrationMaxStep, absoluteTolerance, relativeTolerance
         );
     }
 
-    public ContinuousOutputModel integrateBackwardsOverIntegrals(double[] state, double absoluteTolerance, double relativeTolerance) {
-        return this.integrateOverIntegrals(
-                this.param.getTotalProcessLength(), 0, state, absoluteTolerance, relativeTolerance
-        );
+    public ContinuousOutputModel[] integrateBackwardsOverIntegrals(double[] state) {
+        this.interval = this.param.getTotalIntervalCount() - 1;
+
+        ContinuousOutputModel[] outputModels = new ContinuousOutputModel[this.param.getTotalIntervalCount()];
+
+        for (int interval = this.param.getTotalIntervalCount() - 1; interval >= 0; interval--) {
+            double endTime = this.param.getIntervalEndTimes()[interval];
+            double startTime = 0 < interval ? this.param.getIntervalEndTimes()[interval - 1] : 0;
+
+            ContinuousOutputModel intervalResult = new ContinuousOutputModel();
+            integrator.addStepHandler(intervalResult);
+
+            integrator.integrate(this, endTime, state, startTime, state);
+
+            integrator.clearStepHandlers();
+
+            if (0 < interval) {
+                this.handleIntervalBoundary(startTime, interval, interval - 1, state);
+            }
+
+            outputModels[interval] = (intervalResult);
+        }
+
+        return outputModels;
     }
 
-    public ContinuousOutputModel integrateOverIntegrals(
-            double timeStart,
-            double timeEnd,
-            double[] state,
-            double absoluteTolerance,
-            double relativeTolerance
-    ) {
-        FirstOrderIntegrator integrator = new DormandPrince54Integrator(
-                this.integrationMinStep, this.integrationMaxStep, absoluteTolerance, relativeTolerance
-        );
-
-        integrator.addEventHandler(
-                this,
-                this.param.getTotalProcessLength() / MIN_RATE_CHANGE_NUM_CHECKS,
-                RATE_CHANGE_CHECK_CONVERGENCE, RATE_CHANGE_MAX_ITERATIONS
-        );
-
-        ContinuousOutputModel result = new ContinuousOutputModel();
-        integrator.addStepHandler(result);
-
-        this.interval = this.param.getIntervalIndex(timeStart);
-        integrator.integrate(this, timeStart, state, timeEnd, state);
-
-        return result;
-    }
-
-    /* EventHandler Implementation */
-
-    @Override
-    public void init(double v, double[] doubles, double v1) { }
-
-    @Override
-    public double g(double v, double[] doubles) {
-        double result = 1.0;
-        for (double boundary : param.getIntervalEndTimes())
-            result *= v - boundary;
-
-        return result;
-    }
-
-    @Override
-    public EventHandler.Action eventOccurred(double t, double[] y, boolean increasing) {
-        return EventHandler.Action.RESET_STATE;
-    }
-
-    @Override
-    public void resetState(double t, double[] y) {
-        this.interval = this.param.getIntervalIndex(t);
+    protected void handleIntervalBoundary(double boundaryTime, int oldInterval, int newInterval, double[] state) {
+        this.interval = newInterval;
     }
 
 }

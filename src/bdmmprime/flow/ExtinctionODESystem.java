@@ -6,8 +6,8 @@ import org.apache.commons.math3.exception.MaxCountExceededException;
 
 
 public class ExtinctionODESystem extends IntervalODESystem {
-    public ExtinctionODESystem(Parameterization parameterization) {
-        super(parameterization);
+    public ExtinctionODESystem(Parameterization parameterization, double absoluteTolerance, double relativeTolerance) {
+        super(parameterization, absoluteTolerance, relativeTolerance);
     }
 
     @Override
@@ -29,6 +29,17 @@ public class ExtinctionODESystem extends IntervalODESystem {
                 yDot[i] += param.getCrossBirthRates()[interval][i][j] * (y[i] - y[i] * y[j]);
                 yDot[i] += param.getMigRates()[interval][i][j] * (y[i] - y[j]);
             }
+        }
+    }
+
+    @Override
+    protected void handleIntervalBoundary(double boundaryTime, int oldInterval, int newInterval, double[] state) {
+        super.handleIntervalBoundary(boundaryTime, oldInterval, newInterval, state);
+
+        // include rho sampling effects
+
+        for (int type = 0; type < param.getNTypes(); type++) {
+            state[type] *= (1.0 - param.getRhoValues()[newInterval][type]);
         }
     }
 }

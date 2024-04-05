@@ -74,6 +74,7 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
     int numTypes;
 
     double[] logScalingFactors;
+    boolean[] isRhoSampled;
 
     @Override
     public void initAndValidate() {
@@ -119,12 +120,30 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
         // initialize utils needed
 
         this.logScalingFactors = new double[this.tree.getNodeCount()];
+        this.initializeIsRhoSampled();
+    }
+
+    private void initializeIsRhoSampled() {
+        this.isRhoSampled = new boolean[this.tree.getLeafNodeCount()];
+
+        for (int i = 0; i < this.tree.getLeafNodeCount(); i++) {
+            this.isRhoSampled[i] = false;
+
+            double nodeTime = this.parameterization.getNodeTime(this.tree.getNode(i), this.finalSampleOffset);
+
+            for (double rhoSamplingTime : this.parameterization.getRhoSamplingTimes()) {
+                if (bdmmprime.util.Utils.equalWithPrecision(nodeTime, rhoSamplingTime)) {
+                    this.isRhoSampled[i] = true;
+                    break;
+                }
+            }
+        }
     }
 
     @Override
     public double calculateTreeLogLikelihood(TreeInterface dummyTree) {
-        ContinuousOutputModel extinctionProbabilities = this.calculateExtinctionProbabilities();
-        ContinuousOutputModel flow = this.calculateFlow(extinctionProbabilities);
+        ContinuousOutputModel[] extinctionProbabilities = this.calculateExtinctionProbabilities();
+        ContinuousOutputModel[] flow = this.calculateFlow(extinctionProbabilities);
 
         Node root = this.tree.getRoot();
         double[] rootLikelihoodPerState = this.calculateSubTreeLikelihood(
@@ -157,15 +176,15 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
         return logTreeLikelihood;
     }
 
-    private double calculateConditionDensity(ContinuousOutputModel extinctionProbabilities) {
+    private double calculateConditionDensity(ContinuousOutputModel[] extinctionProbabilities) {
         // see Tanja Stadler, How Can We Improve Accuracy of Macroevolutionary Rate Estimates?,
         // Systematic Biology, Volume 62, Issue 2, March 2013, Pages 321–329,
         // https://doi.org/10.1093/sysbio/sys073
         double conditionDensity = 0.0;
 
         if (this.conditionOnRoot) {
-            extinctionProbabilities.setInterpolatedTime(0);
-            double[] extinctionAtRoot = extinctionProbabilities.getInterpolatedState();
+            extinctionProbabilities[0].setInterpolatedTime(0);
+            double[] extinctionAtRoot = extinctionProbabilities[0].getInterpolatedState();
 
             int startInterval = this.parameterization.getIntervalIndex(0);
 
@@ -181,8 +200,8 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
                 }
             }
         } else if (this.conditionOnSurvival) {
-            extinctionProbabilities.setInterpolatedTime(0);
-            double[] extinctionAtRoot = extinctionProbabilities.getInterpolatedState();
+            extinctionProbabilities[0].setInterpolatedTime(0);
+            double[] extinctionAtRoot = extinctionProbabilities[0].getInterpolatedState();
 
             for (int type = 0; type < parameterization.getNTypes(); type++) {
                 conditionDensity += this.frequencies[type] * (1 - extinctionAtRoot[type]);
@@ -194,17 +213,21 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
         return conditionDensity;
     }
 
-    private ContinuousOutputModel calculateExtinctionProbabilities() {
-        IntervalODESystem system = new ExtinctionODESystem(this.parameterization);
+    private ContinuousOutputModel[] calculateExtinctionProbabilities() {
+        IntervalODESystem system = new ExtinctionODESystem(this.parameterization, this.absoluteTolerance, this.relativeTolerance);
+
+        int endInterval = this.parameterization.getIntervalIndex(this.parameterization.getTotalProcessLength());
 
         double[] initialState = new double[this.parameterization.getNTypes()];
-        Arrays.fill(initialState, 1.0);
+        for (int i = 0; i < this.parameterization.getNTypes(); i++) {
+            initialState[i] = 1 - this.parameterization.getRhoValues()[endInterval][i];
+        }
 
-        return system.integrateBackwardsOverIntegrals(initialState, this.absoluteTolerance, this.relativeTolerance);
+        return system.integrateBackwardsOverIntegrals(initialState);
     }
 
-    private ContinuousOutputModel calculateFlow(ContinuousOutputModel extinctionProbabilities) {
-        FlowODESystem system = new FlowODESystem(this.parameterization, extinctionProbabilities);
+    private ContinuousOutputModel[] calculateFlow(ContinuousOutputModel[] extinctionProbabilities) {
+        FlowODESystem system = new FlowODESystem(this.parameterization, extinctionProbabilities, this.absoluteTolerance, this.relativeTolerance);
 
         double[] initialState = new double[this.parameterization.getNTypes() * this.parameterization.getNTypes()];
         for (int i = 0; i < this.parameterization.getNTypes(); i++) {
@@ -212,15 +235,15 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
             initialState[i * this.parameterization.getNTypes() + i] = 1;
         }
 
-        return system.integrateBackwardsOverIntegrals(initialState, this.absoluteTolerance, this.relativeTolerance);
+        return system.integrateBackwardsOverIntegrals(initialState);
     }
 
     private double[] calculateSubTreeLikelihood(
             Node root,
             double timeEdgeStart,
             double timeEdgeEnd,
-            ContinuousOutputModel flow,
-            ContinuousOutputModel extinctionProbabilities
+            ContinuousOutputModel[] flow,
+            ContinuousOutputModel[] extinctionProbabilities
     ) {
         double[] likelihoodEdgeEnd;
 
@@ -232,9 +255,18 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
             likelihoodEdgeEnd = calculateInternalEdgeLikelihood(root, timeEdgeEnd, flow, extinctionProbabilities);
         }
 
+        int intervalEdgeStart = this.parameterization.getIntervalIndex(timeEdgeStart);
+        int intervalEdgeEnd = this.parameterization.getIntervalIndex(timeEdgeEnd);
+
+        if (intervalEdgeStart < this.parameterization.getTotalIntervalCount() - 1 && timeEdgeStart == this.parameterization.getIntervalEndTimes()[intervalEdgeStart]) {
+            intervalEdgeStart++;
+        }
+
         return FlowODESystem.integrateUsingFlow(
                 timeEdgeStart,
+                intervalEdgeStart,
                 timeEdgeEnd,
+                intervalEdgeEnd,
                 likelihoodEdgeEnd,
                 flow
         );
@@ -243,22 +275,26 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
     private double[] calculateLeafLikelihood(
             Node root,
             double timeEdgeEnd,
-            ContinuousOutputModel extinctionProbabilities
+            ContinuousOutputModel[] extinctionProbabilities
     ) {
 
         int intervalEdgeEnd = this.parameterization.getIntervalIndex(timeEdgeEnd);
 
-        extinctionProbabilities.setInterpolatedTime(timeEdgeEnd);
-        double[] extinctionProbabilityEdgeEnd = extinctionProbabilities.getInterpolatedState();
+        extinctionProbabilities[intervalEdgeEnd].setInterpolatedTime(timeEdgeEnd);
+        double[] extinctionProbabilityEdgeEnd = extinctionProbabilities[intervalEdgeEnd].getInterpolatedState();
 
         int nodeType = this.getNodeType(root);
 
         double[] likelihoodEdgeEnd = new double[this.parameterization.getNTypes()];
-        likelihoodEdgeEnd[nodeType] = this.parameterization.getSamplingRates()[intervalEdgeEnd][nodeType] * (
-                this.parameterization.getRemovalProbs()[intervalEdgeEnd][nodeType]
-                        + (1 - this.parameterization.getRemovalProbs()[intervalEdgeEnd][nodeType])
-                        * extinctionProbabilityEdgeEnd[nodeType]
-        );
+
+        if (isRhoSampled[root.getNr()]) {
+            likelihoodEdgeEnd[nodeType] = this.parameterization.getRhoValues()[intervalEdgeEnd][nodeType];
+        } else {
+            likelihoodEdgeEnd[nodeType] = this.parameterization.getSamplingRates()[intervalEdgeEnd][nodeType] *
+                    (this.parameterization.getRemovalProbs()[intervalEdgeEnd][nodeType]
+                            + (1 - this.parameterization.getRemovalProbs()[intervalEdgeEnd][nodeType])
+                            * extinctionProbabilityEdgeEnd[nodeType]);
+        }
 
         this.logScalingFactors[root.getNr()] = Utils.rescale(likelihoodEdgeEnd);
 
@@ -268,8 +304,8 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
     private double[] calculateDirectAncestorWithChildLikelihood(
             Node root,
             double timeEdgeEnd,
-            ContinuousOutputModel flow,
-            ContinuousOutputModel extinctionProbabilities
+            ContinuousOutputModel[] flow,
+            ContinuousOutputModel[] extinctionProbabilities
     ) {
         int intervalEdgeEnd = this.parameterization.getIntervalIndex(timeEdgeEnd);
 
@@ -289,8 +325,14 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
         int nodeType = this.getNodeType(directAncestor);
 
         double[] likelihoodEdgeEnd = new double[this.parameterization.getNTypes()];
-        likelihoodEdgeEnd[nodeType] = this.parameterization.getSamplingRates()[intervalEdgeEnd][nodeType]
-                * (1 - this.parameterization.getRemovalProbs()[intervalEdgeEnd][nodeType])
+
+        if (isRhoSampled[directAncestor.getNr()]) {
+            likelihoodEdgeEnd[nodeType] = this.parameterization.getRhoValues()[intervalEdgeEnd][nodeType];
+        } else {
+            likelihoodEdgeEnd[nodeType] = this.parameterization.getSamplingRates()[intervalEdgeEnd][nodeType];
+        }
+
+        likelihoodEdgeEnd[nodeType] *= (1 - this.parameterization.getRemovalProbs()[intervalEdgeEnd][nodeType])
                 * likelihoodChild[nodeType];
 
         this.logScalingFactors[root.getNr()] = Utils.rescale(likelihoodEdgeEnd, this.logScalingFactors[child.getNr()]);
@@ -301,8 +343,8 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
     private double[] calculateInternalEdgeLikelihood(
             Node root,
             double timeEdgeEnd,
-            ContinuousOutputModel flow,
-            ContinuousOutputModel extinctionProbabilities
+            ContinuousOutputModel[] flow,
+            ContinuousOutputModel[] extinctionProbabilities
     ) {
         int intervalEdgeEnd = this.parameterization.getIntervalIndex(timeEdgeEnd);
 

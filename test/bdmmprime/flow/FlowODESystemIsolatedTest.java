@@ -20,8 +20,8 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 public class FlowODESystemIsolatedTest {
 
     static class NormalFlowODESystem extends FlowODESystem {
-        public NormalFlowODESystem(Parameterization parameterization, ContinuousOutputModel extinctionProbabilities) {
-            super(parameterization, extinctionProbabilities);
+        public NormalFlowODESystem(Parameterization parameterization, ContinuousOutputModel[] extinctionProbabilities) {
+            super(parameterization, extinctionProbabilities, 1e-100, 1e-20);
         }
 
         @Override
@@ -45,16 +45,18 @@ public class FlowODESystemIsolatedTest {
     ) {
         // set up extinction ODE
 
-        IntervalODESystem extinctionSystem = new ExtinctionODESystem(parameterization);
+        IntervalODESystem extinctionSystem = new ExtinctionODESystem(parameterization, 1e-100, 1e-20);
 
         double[] initialExtinctionState = new double[parameterization.getNTypes()];
         Arrays.fill(initialExtinctionState, 1.0);
 
-        ContinuousOutputModel extinctionProbabilities = extinctionSystem.integrateBackwardsOverIntegrals(
-                initialExtinctionState, 1e-100, 1e-20
+        ContinuousOutputModel[] extinctionProbabilities = extinctionSystem.integrateBackwardsOverIntegrals(
+                initialExtinctionState
         );
-        extinctionProbabilities.setInterpolatedTime(endTime);
-        double[] endExtinction = extinctionProbabilities.getInterpolatedState().clone();
+
+        int intervalEndTime = parameterization.getIntervalIndex(endTime);
+        extinctionProbabilities[intervalEndTime].setInterpolatedTime(endTime);
+        double[] endExtinction = extinctionProbabilities[intervalEndTime].getInterpolatedState().clone();
 
         // set up integrator
 

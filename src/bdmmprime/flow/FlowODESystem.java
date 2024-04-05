@@ -3,14 +3,20 @@ package bdmmprime.flow;
 import bdmmprime.parameterization.Parameterization;
 import org.apache.commons.math3.linear.*;
 import org.apache.commons.math3.ode.ContinuousOutputModel;
+import org.apache.commons.math3.ode.sampling.StepInterpolator;
 
 import java.util.Arrays;
 
 public class FlowODESystem extends IntervalODESystem {
-    private final ContinuousOutputModel extinctionProbabilities;
+    private final ContinuousOutputModel[] extinctionProbabilities;
 
-    public FlowODESystem(Parameterization parameterization, ContinuousOutputModel extinctionProbabilities) {
-        super(parameterization);
+    public FlowODESystem(
+            Parameterization parameterization,
+            ContinuousOutputModel[] extinctionProbabilities,
+            double absoluteTolerance,
+            double relativeTolerance
+    ) {
+        super(parameterization, absoluteTolerance, relativeTolerance);
         this.extinctionProbabilities = extinctionProbabilities;
     }
 
@@ -24,8 +30,8 @@ public class FlowODESystem extends IntervalODESystem {
 
         int interval = this.param.getIntervalIndex(t);
 
-        this.extinctionProbabilities.setInterpolatedTime(t);
-        double[] extinctProbabilities = this.extinctionProbabilities.getInterpolatedState();
+        this.extinctionProbabilities[interval].setInterpolatedTime(t);
+        double[] extinctProbabilities = this.extinctionProbabilities[interval].getInterpolatedState();
 
         // fill transitions
 
@@ -84,18 +90,20 @@ public class FlowODESystem extends IntervalODESystem {
 
     public static double[] integrateUsingFlow(
             double timeStart,
+            int intervalStart,
             double timeEnd,
+            int intervalEnd,
             double[] initialState,
-            ContinuousOutputModel flow
+            ContinuousOutputModel[] flow
     ) {
         int n = initialState.length;
 
-        flow.setInterpolatedTime(timeStart);
-        double[] flowStart = flow.getInterpolatedState();
+        flow[intervalStart].setInterpolatedTime(timeStart);
+        double[] flowStart = flow[intervalStart].getInterpolatedState();
         RealMatrix flowMatrixStart = Utils.toMatrix(flowStart, n);
 
-        flow.setInterpolatedTime(timeEnd);
-        double[] flowEnd = flow.getInterpolatedState();
+        flow[intervalEnd].setInterpolatedTime(timeEnd);
+        double[] flowEnd = flow[intervalEnd].getInterpolatedState();
         RealMatrix flowMatrixEnd = Utils.toMatrix(flowEnd, n);
 
         RealVector likelihoodVectorEnd = Utils.toVector(initialState);
@@ -106,5 +114,18 @@ public class FlowODESystem extends IntervalODESystem {
         RealVector likelihoodVectorStart = flowMatrixStart.operate(solution);
 
         return likelihoodVectorStart.toArray();
+    }
+
+    @Override
+    protected void handleIntervalBoundary(double boundaryTime, int oldInterval, int newInterval, double[] state) {
+        super.handleIntervalBoundary(boundaryTime, oldInterval, newInterval, state);
+
+        // include rho sampling effects
+
+        for (int i = 0; i < this.param.getNTypes(); i++) {
+            for (int j = 0; j < this.param.getNTypes(); j++) {
+                state[i*this.param.getNTypes() + j] *= (1 - this.param.getRhoValues()[newInterval][i]);
+            }
+        }
     }
 }
