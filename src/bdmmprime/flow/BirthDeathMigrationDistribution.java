@@ -1,14 +1,16 @@
 package bdmmprime.flow;
-
+import beast.base.core.Log;
 import bdmmprime.parameterization.Parameterization;
 import beast.base.core.Function;
 import beast.base.core.Input;
 import beast.base.evolution.speciation.SpeciesTreeDistribution;
 import beast.base.evolution.tree.Node;
+import beast.base.evolution.tree.TraitSet;
 import beast.base.evolution.tree.Tree;
 import beast.base.evolution.tree.TreeInterface;
 import beast.base.inference.parameter.RealParameter;
 import org.apache.commons.math.special.Gamma;
+import org.apache.commons.math3.linear.SingularMatrixException;
 import org.apache.commons.math3.ode.ContinuousOutputModel;
 
 import java.util.Arrays;
@@ -38,6 +40,9 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
             "Attribute key used to specify sample trait values in tree."
     );
 
+    public Input<TraitSet> typeTraitSetInput = new Input<>("typeTraitSet",
+            "Trait set specifying sample trait values.");
+
     public Input<Boolean> conditionOnSurvivalInput = new Input<>("conditionOnSurvival",
             "Condition on at least one surviving lineage. (Default true.)",
             true);
@@ -62,6 +67,7 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
     private double finalSampleOffset;
     private TreeInterface tree;
     private String typeLabel;
+    private TraitSet typeTraitSet;
 
     double[] frequencies;
 
@@ -84,6 +90,7 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
         this.finalSampleOffset = this.finalSampleOffsetInput.get().getArrayValue();
         this.tree = this.treeInput.get();
         this.typeLabel = this.typeLabelInput.get();
+        this.typeTraitSet = this.typeTraitSetInput.get();
         this.frequencies = this.frequenciesInput.get().getDoubleValues();
         this.conditionOnRoot = this.conditionOnRootInput.get();
         this.conditionOnSurvival = this.conditionOnSurvivalInput.get();
@@ -93,9 +100,9 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
 
         // validate typeLabelInput
 
-        if (this.numTypes != 1 && this.typeLabelInput.get() == null) {
+        if (this.numTypes != 1 && this.typeLabel == null && this.typeTraitSet == null) {
             throw new RuntimeException(
-                    "Error: For models with >1 type, typeLabel must be specified."
+                    "Error: For models with >1 type, typeLabel or typeTraitSet must be specified."
             );
         }
 
@@ -146,13 +153,19 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
         ContinuousOutputModel[] flow = this.calculateFlow(extinctionProbabilities);
 
         Node root = this.tree.getRoot();
-        double[] rootLikelihoodPerState = this.calculateSubTreeLikelihood(
-                root,
-                0,
-                this.parameterization.getNodeTime(root, this.finalSampleOffset),
-                flow,
-                extinctionProbabilities
-        );
+        double[] rootLikelihoodPerState;
+        try {
+            rootLikelihoodPerState = this.calculateSubTreeLikelihood(
+                    root,
+                    0,
+                    this.parameterization.getNodeTime(root, this.finalSampleOffset),
+                    flow,
+                    extinctionProbabilities
+            );
+        } catch (SingularMatrixException exception) {
+            Log.warning("Singular matrix was found during tree likelihood calculation.");
+            return Float.NEGATIVE_INFINITY;
+        }
 
         // get tree likelihood by a weighted average of the root likelihood per state
 
@@ -400,11 +413,15 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
 
         String nodeTypeName;
 
-        Object metaData = node.getMetaData(this.typeLabel);
-        if (metaData instanceof Double) {
-            nodeTypeName = String.valueOf(Math.round((double) metaData));
-        } else {
-            nodeTypeName = metaData.toString();
+        if (this.typeTraitSet != null)
+            nodeTypeName = this.typeTraitSet.getStringValue(node.getID());
+        else {
+            Object metaData = node.getMetaData(this.typeLabel);
+            if (metaData instanceof Double) {
+                nodeTypeName = String.valueOf(Math.round((double) metaData));
+            } else {
+                nodeTypeName = metaData.toString();
+            }
         }
 
         return parameterization.getTypeSet().getTypeIndex(nodeTypeName);

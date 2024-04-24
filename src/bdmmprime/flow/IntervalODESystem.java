@@ -1,11 +1,9 @@
 package bdmmprime.flow;
 
 import bdmmprime.parameterization.Parameterization;
-import bdmmprime.util.Utils;
 import org.apache.commons.math3.ode.ContinuousOutputModel;
 import org.apache.commons.math3.ode.FirstOrderDifferentialEquations;
 import org.apache.commons.math3.ode.FirstOrderIntegrator;
-import org.apache.commons.math3.ode.events.EventHandler;
 import org.apache.commons.math3.ode.nonstiff.*;
 
 
@@ -20,7 +18,7 @@ public abstract class IntervalODESystem implements FirstOrderDifferentialEquatio
         this.param = parameterization;
         double integrationMinStep = this.param.getTotalProcessLength() * 1e-100;
         double integrationMaxStep = this.param.getTotalProcessLength() / 20;
-        this.integrator = new DormandPrince853Integrator(
+        this.integrator = new DormandPrince54Integrator(
                 integrationMinStep, integrationMaxStep, absoluteTolerance, relativeTolerance
         );
     }

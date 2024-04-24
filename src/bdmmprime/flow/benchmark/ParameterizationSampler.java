@@ -14,7 +14,7 @@ public class ParameterizationSampler {
     public Parameterization sampleParameterization() {
         Parameterization parameterization = new CanonicalParameterization();
 
-        int numTypes = this.random.nextInt(2, 11);
+        int numTypes = 50; // this.random.nextInt(2, 11);
         double processLength = this.random.nextDouble(5.5);
 
         double[] birthRates = sampleUniformDoubles(numTypes, 1, 3);

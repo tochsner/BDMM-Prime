@@ -36,6 +36,7 @@
     <provider classname="bdmmprime.parameterization.TypeSet"/>
     <provider classname="bdmmprime.distribution.BinomialDistribution"/>
     <provider classname="bdmmprime.distribution.BirthDeathMigrationDistribution"/>
+    <provider classname="bdmmprime.flow.BirthDeathMigrationDistribution"/>
     <provider classname="bdmmprime.distribution.StartTypeProbLogger"/>
     <provider classname="bdmmprime.trajectories.simulation.SimulatedTrajectoryLogger"/>
     <provider classname="bdmmprime.trajectories.simulation.SimulatedTree"/>
