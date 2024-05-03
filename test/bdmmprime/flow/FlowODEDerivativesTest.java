@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 public class FlowODEDerivativesTest {
 
     static class NormalFlowODESystem extends FlowODESystem {
-        public NormalFlowODESystem(Parameterization parameterization, ContinuousOutputModel[] extinctionProbabilities) {
+        public NormalFlowODESystem(Parameterization parameterization, ExtinctionProbabilities extinctionProbabilities) {
             super(parameterization, extinctionProbabilities, 1e-100, 1e-7);
         }
 
@@ -49,8 +49,10 @@ public class FlowODEDerivativesTest {
         double[] initialExtinctionState = new double[parameterization.getNTypes()];
         Arrays.fill(initialExtinctionState, 1.0);
 
-        ContinuousOutputModel[] extinctionProbabilities = extinctionSystem.integrateBackwardsOverIntegrals(
-                initialExtinctionState
+        ExtinctionProbabilities extinctionProbabilities = new ExtinctionProbabilities(
+                extinctionSystem.integrateBackwardsOverIntegrals(
+                        initialExtinctionState
+                )
         );
 
         // get flow ODE derivatives
@@ -64,19 +66,18 @@ public class FlowODEDerivativesTest {
         P0GeSystem oldSystem = new P0GeSystem(parameterization, 1e-100, 1e-20);
 
         int interval = parameterization.getIntervalIndex(t);
-        extinctionProbabilities[interval].setInterpolatedTime(t);
-        double[] startExtinction = extinctionProbabilities[interval].getInterpolatedState();
+        double[] startExtinction = extinctionProbabilities.getProbabilities(t, interval);
         double[] oldInitialState = new double[]{
                 startExtinction[0],
                 startExtinction[1],
                 initialState[0],
                 initialState[1]
         };
-        double[] oldDerivatives = new double[2*initialState.length];
+        double[] oldDerivatives = new double[2 * initialState.length];
         oldSystem.computeDerivatives(t, oldInitialState, oldDerivatives);
 
         for (int i = 0; i < initialState.length; i++) {
-            assertEquals(oldDerivatives[i+2], flowDerivatives[i], 1e-7);
+            assertEquals(oldDerivatives[i + 2], flowDerivatives[i], 1e-7);
         }
     }
 

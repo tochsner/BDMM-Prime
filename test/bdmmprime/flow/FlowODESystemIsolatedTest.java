@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 public class FlowODESystemIsolatedTest {
 
     static class NormalFlowODESystem extends FlowODESystem {
-        public NormalFlowODESystem(Parameterization parameterization, ContinuousOutputModel[] extinctionProbabilities) {
+        public NormalFlowODESystem(Parameterization parameterization, ExtinctionProbabilities extinctionProbabilities) {
             super(parameterization, extinctionProbabilities, 1e-100, 1e-20);
         }
 
@@ -50,13 +50,12 @@ public class FlowODESystemIsolatedTest {
         double[] initialExtinctionState = new double[parameterization.getNTypes()];
         Arrays.fill(initialExtinctionState, 1.0);
 
-        ContinuousOutputModel[] extinctionProbabilities = extinctionSystem.integrateBackwardsOverIntegrals(
+        ExtinctionProbabilities extinctionProbabilities = new ExtinctionProbabilities(extinctionSystem.integrateBackwardsOverIntegrals(
                 initialExtinctionState
-        );
+        ));
 
         int intervalEndTime = parameterization.getIntervalIndex(endTime);
-        extinctionProbabilities[intervalEndTime].setInterpolatedTime(endTime);
-        double[] endExtinction = extinctionProbabilities[intervalEndTime].getInterpolatedState().clone();
+        double[] endExtinction = extinctionProbabilities.getProbabilities(endTime, intervalEndTime);
 
         // set up integrator
 
@@ -79,7 +78,7 @@ public class FlowODESystemIsolatedTest {
                 parameterization, 1e-100, 1e-10
         );
         double[] normalIntegral = new double[4];
-        double[] normalInitialState = new double[] {
+        double[] normalInitialState = new double[]{
                 endExtinction[0], endExtinction[1], initialState[0], initialState[1]
         };
         integrator.integrate(normalSystem, endTime, normalInitialState.clone(), startTime, normalIntegral);
@@ -129,7 +128,7 @@ public class FlowODESystemIsolatedTest {
                 "processLength", new RealParameter("6.0"),
                 "R0", new SkylineVectorParameter(
                         null,
-                        new RealParameter((4.0/3.0) + " 1.1"),
+                        new RealParameter((4.0 / 3.0) + " 1.1"),
                         2),
                 "becomeUninfectiousRate", new SkylineVectorParameter(
                         null,

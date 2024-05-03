@@ -2,17 +2,13 @@ package bdmmprime.flow;
 
 import bdmmprime.parameterization.Parameterization;
 import org.apache.commons.math3.linear.*;
-import org.apache.commons.math3.ode.ContinuousOutputModel;
-import org.apache.commons.math3.ode.sampling.StepInterpolator;
-
-import java.util.Arrays;
 
 public class FlowODESystem extends IntervalODESystem {
-    private final ContinuousOutputModel[] extinctionProbabilities;
+    private final ExtinctionProbabilities extinctionProbabilities;
 
     public FlowODESystem(
             Parameterization parameterization,
-            ContinuousOutputModel[] extinctionProbabilities,
+            ExtinctionProbabilities extinctionProbabilities,
             double absoluteTolerance,
             double relativeTolerance
     ) {
@@ -25,13 +21,10 @@ public class FlowODESystem extends IntervalODESystem {
         return param.getNTypes() * param.getNTypes();
     }
 
-    protected RealMatrix buildSystemMatrix(double t) {
+    protected RealMatrix buildTimeInvariantSystemMatrix(double t) {
         RealMatrix system = new BlockRealMatrix(param.getNTypes(), param.getNTypes());
 
         int interval = this.param.getIntervalIndex(t);
-
-        this.extinctionProbabilities[interval].setInterpolatedTime(t);
-        double[] extinctProbabilities = this.extinctionProbabilities[interval].getInterpolatedState();
 
         // fill transitions
 
@@ -41,7 +34,6 @@ public class FlowODESystem extends IntervalODESystem {
                         i,
                         j,
                         -this.param.getMigRates()[interval][i][j]
-                                - this.param.getCrossBirthRates()[interval][i][j] * extinctProbabilities[i]
                 );
             }
         }
@@ -54,6 +46,40 @@ public class FlowODESystem extends IntervalODESystem {
                     i,
                     this.param.getDeathRates()[interval][i] + this.param.getSamplingRates()[interval][i]
             );
+
+            for (int j = 0; j < param.getNTypes(); j++) {
+                system.addToEntry(
+                        i,
+                        i,
+                        this.param.getMigRates()[interval][i][j]
+                );
+            }
+        }
+
+        return system;
+    }
+
+    protected RealMatrix buildTimeVaryingSystemMatrix(double t) {
+        RealMatrix system = new BlockRealMatrix(param.getNTypes(), param.getNTypes());
+
+        int interval = this.param.getIntervalIndex(t);
+        double[] extinctProbabilities = this.extinctionProbabilities.getProbabilities(t, interval);
+
+        // fill transitions
+
+        for (int i = 0; i < param.getNTypes(); i++) {
+            for (int j = 0; j < param.getNTypes(); j++) {
+                system.addToEntry(
+                        i,
+                        j,
+                        -this.param.getCrossBirthRates()[interval][i][j] * extinctProbabilities[i]
+                );
+            }
+        }
+
+        // fill diagonals
+
+        for (int i = 0; i < param.getNTypes(); i++) {
             system.addToEntry(
                     i,
                     i,
@@ -64,17 +90,18 @@ public class FlowODESystem extends IntervalODESystem {
                 system.addToEntry(
                         i,
                         i,
-                        this.param.getMigRates()[interval][i][j]
-                );
-                system.addToEntry(
-                        i,
-                        i,
                         -this.param.getCrossBirthRates()[interval][i][j] * (extinctProbabilities[j] - 1)
                 );
             }
         }
 
         return system;
+    }
+
+    protected RealMatrix buildSystemMatrix(double t) {
+        RealMatrix timeInvariantMatrix = this.buildTimeInvariantSystemMatrix(t);
+        RealMatrix timeVaryingMatrix = this.buildTimeVaryingSystemMatrix(t);
+        return timeInvariantMatrix.add(timeVaryingMatrix);
     }
 
     @Override
@@ -94,26 +121,25 @@ public class FlowODESystem extends IntervalODESystem {
             double timeEnd,
             int intervalEnd,
             double[] initialState,
-            ContinuousOutputModel[] flow
+            Flow flow
     ) {
         int n = initialState.length;
 
-        flow[intervalStart].setInterpolatedTime(timeStart);
-        double[] flowStart = flow[intervalStart].getInterpolatedState();
-        RealMatrix flowMatrixStart = Utils.toMatrix(flowStart, n);
-
-        flow[intervalEnd].setInterpolatedTime(timeEnd);
-        double[] flowEnd = flow[intervalEnd].getInterpolatedState();
-        RealMatrix flowMatrixEnd = Utils.toMatrix(flowEnd, n);
+        RealMatrix flowMatrixStart = flow.getFlow(timeStart, intervalStart);
+        RealMatrix flowMatrixEnd = flow.getFlow(timeEnd, intervalEnd);
 
         RealVector likelihoodVectorEnd = Utils.toVector(initialState);
 
-        DecompositionSolver linearSolver = new QRDecomposition(flowMatrixEnd).getSolver();
-        RealVector solution = linearSolver.solve(likelihoodVectorEnd);
+        try {
+            DecompositionSolver linearSolver = new QRDecomposition(flowMatrixEnd).getSolver();
+            RealVector solution = linearSolver.solve(likelihoodVectorEnd);
 
-        RealVector likelihoodVectorStart = flowMatrixStart.operate(solution);
+            RealVector likelihoodVectorStart = flowMatrixStart.operate(solution);
 
-        return likelihoodVectorStart.toArray();
+            return likelihoodVectorStart.toArray();
+        } catch (SingularMatrixException e) {
+            throw e;
+        }
     }
 
     @Override
