@@ -2,9 +2,15 @@ package bdmmprime.flow;
 
 import bdmmprime.parameterization.Parameterization;
 import org.apache.commons.math3.linear.*;
+import org.apache.commons.math3.ode.ContinuousOutputModel;
+
+import static jeigen.Shortcuts.*;
+import jeigen.DenseMatrix;
 
 public class FlowODESystem extends IntervalODESystem {
     private final ExtinctionProbabilities extinctionProbabilities;
+    private DenseMatrix constantMatrix;
+    private RealMatrix realConstantMatrix;
 
     public FlowODESystem(
             Parameterization parameterization,
@@ -101,7 +107,27 @@ public class FlowODESystem extends IntervalODESystem {
     protected RealMatrix buildSystemMatrix(double t) {
         RealMatrix timeInvariantMatrix = this.buildTimeInvariantSystemMatrix(t);
         RealMatrix timeVaryingMatrix = this.buildTimeVaryingSystemMatrix(t);
-        return timeInvariantMatrix.add(timeVaryingMatrix);
+
+        double[] values = new double[this.param.getNTypes() * this.param.getNTypes()];
+        Utils.fillArray(timeVaryingMatrix, values);
+
+        DenseMatrix A = this.constantMatrix.mul(this.param.getTotalProcessLength() - t).mexp();
+        DenseMatrix B = this.constantMatrix.mul(-this.param.getTotalProcessLength() + t).mexp();
+
+        return Utils.toMatrix(A).multiply(timeVaryingMatrix.add(timeInvariantMatrix).subtract(this.realConstantMatrix)).multiply(Utils.toMatrix(B));
+    }
+
+    public ContinuousOutputModel[] integrateBackwardsOverIntegrals(double[] state) {
+        double[] v = new double[this.param.getNTypes()*this.param.getNTypes()];
+
+        RealMatrix constantMatrix = new BlockRealMatrix(this.param.getNTypes(), this.param.getNTypes()); //  this.buildTimeInvariantSystemMatrix(this.param.getTotalProcessLength());
+        Utils.fillArray(constantMatrix, v);
+        this.realConstantMatrix = constantMatrix;
+
+        this.constantMatrix = new DenseMatrix(this.param.getNTypes(), this.param.getNTypes());
+        Utils.fillMatrix(this.constantMatrix, v);
+
+        return super.integrateBackwardsOverIntegrals(state);
     }
 
     @Override
@@ -123,8 +149,6 @@ public class FlowODESystem extends IntervalODESystem {
             double[] initialState,
             Flow flow
     ) {
-        int n = initialState.length;
-
         RealMatrix flowMatrixStart = flow.getFlow(timeStart, intervalStart);
         RealMatrix flowMatrixEnd = flow.getFlow(timeEnd, intervalEnd);
 
