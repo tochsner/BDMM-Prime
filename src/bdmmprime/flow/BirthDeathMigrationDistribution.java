@@ -246,7 +246,12 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
             initialState[i * this.parameterization.getNTypes() + i] = 1;
         }
 
-        return new Flow(system.integrateBackwardsOverIntegrals(initialState), this.parameterization.getNTypes());
+        return new Flow(
+                system.integrateBackwardsOverIntegrals(initialState),
+                this.parameterization.getNTypes(),
+                system.negExponentials,
+                this.parameterization.getTotalProcessLength()
+        );
     }
 
     private double[] calculateSubTreeLikelihood(

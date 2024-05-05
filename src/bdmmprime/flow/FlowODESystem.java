@@ -11,9 +11,9 @@ import jeigen.DenseMatrix;
 
 public class FlowODESystem extends IntervalODESystem {
     private final ExtinctionProbabilities extinctionProbabilities;
-    private RealMatrix constantMatrix;
-    private ContinuousOutputModel negExponentials;
-    private ContinuousOutputModel posExponentials;
+    public RealMatrix constantMatrix;
+    public ContinuousOutputModel negExponentials;
+    public ContinuousOutputModel posExponentials;
 
     public FlowODESystem(
             Parameterization parameterization,
@@ -30,7 +30,7 @@ public class FlowODESystem extends IntervalODESystem {
             double absoluteTolerance,
             double relativeTolerance
     ) {
-        this.constantMatrix = new BlockRealMatrix(this.param.getNTypes(), this.param.getNTypes()); //  this.buildTimeInvariantSystemMatrix(this.param.getTotalProcessLength());
+        this.constantMatrix = this.buildTimeInvariantSystemMatrix(this.param.getTotalProcessLength());
         ExponentialODESystem system = new ExponentialODESystem(constantMatrix, this.param, absoluteTolerance, relativeTolerance);
 
         double[] initialState = new double[this.param.getNTypes() * this.param.getNTypes()];
@@ -158,7 +158,7 @@ public class FlowODESystem extends IntervalODESystem {
         double[] arrayB = this.negExponentials.getInterpolatedState();
         RealMatrix B = Utils.toMatrix(arrayB, this.param.getNTypes());
 
-        return A.multiply(timeVaryingMatrix.add(timeInvariantMatrix)).multiply(B);
+        return A.multiply(timeVaryingMatrix.add(timeInvariantMatrix).subtract(constantMatrix)).multiply(B);
     }
 
     @Override

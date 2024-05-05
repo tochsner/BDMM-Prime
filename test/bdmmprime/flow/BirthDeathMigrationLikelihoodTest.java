@@ -40,7 +40,7 @@ public class BirthDeathMigrationLikelihoodTest {
      * Reference from BDMM itself
      * Canonical parameterization
      */
-    @Test
+     @Test
     public void testLikelihoodMigRateChangeBasicCanonical() {
 
         // Test for uncoloured tree
