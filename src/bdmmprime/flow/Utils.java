@@ -1,11 +1,9 @@
 package bdmmprime.flow;
 
-import jeigen.DenseMatrix;
 import org.apache.commons.math3.linear.ArrayRealVector;
 import org.apache.commons.math3.linear.BlockRealMatrix;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.linear.RealVector;
-import org.jblas.DoubleMatrix;
 
 import java.util.Arrays;
 
@@ -26,25 +24,6 @@ public class Utils  {
                 array[i + matrix.getRowDimension()*j] = matrix.getEntry(i, j);
             }
         }
-    }
-
-    public static void fillMatrix(DenseMatrix matrix, double[] array) {
-        for (int i = 0; i < matrix.rows; i++) {
-            for (int j = 0; j < matrix.cols; j++) {
-                array[i + matrix.rows*j] = matrix.get(i, j);
-            }
-        }
-    }
-
-
-    public static RealMatrix toMatrix(DenseMatrix matrix) {
-        RealMatrix result = new BlockRealMatrix(matrix.rows, matrix.cols);
-        for (int i = 0; i < matrix.rows; i++) {
-            for (int j = 0; j < matrix.cols; j++) {
-                result.setEntry(i, j, matrix.get(i, j));
-            }
-        }
-        return result;
     }
 
     public static void fillVector(RealVector vector, double[] array) {

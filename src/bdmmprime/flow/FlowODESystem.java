@@ -1,16 +1,19 @@
 package bdmmprime.flow;
 
 import bdmmprime.parameterization.Parameterization;
+import org.apache.commons.math3.analysis.function.Exp;
 import org.apache.commons.math3.linear.*;
 import org.apache.commons.math3.ode.ContinuousOutputModel;
 
 import static jeigen.Shortcuts.*;
+
 import jeigen.DenseMatrix;
 
 public class FlowODESystem extends IntervalODESystem {
     private final ExtinctionProbabilities extinctionProbabilities;
-    private DenseMatrix constantMatrix;
-    private RealMatrix realConstantMatrix;
+    private RealMatrix constantMatrix;
+    private ContinuousOutputModel negExponentials;
+    private ContinuousOutputModel posExponentials;
 
     public FlowODESystem(
             Parameterization parameterization,
@@ -20,6 +23,42 @@ public class FlowODESystem extends IntervalODESystem {
     ) {
         super(parameterization, absoluteTolerance, relativeTolerance);
         this.extinctionProbabilities = extinctionProbabilities;
+        this.setUpExponentials(absoluteTolerance, relativeTolerance);
+    }
+
+    protected void setUpExponentials(
+            double absoluteTolerance,
+            double relativeTolerance
+    ) {
+        this.constantMatrix = new BlockRealMatrix(this.param.getNTypes(), this.param.getNTypes()); //  this.buildTimeInvariantSystemMatrix(this.param.getTotalProcessLength());
+        ExponentialODESystem system = new ExponentialODESystem(constantMatrix, this.param, absoluteTolerance, relativeTolerance);
+
+        double[] initialState = new double[this.param.getNTypes() * this.param.getNTypes()];
+        for (int i = 0; i < this.param.getNTypes(); i++) {
+            initialState[i * this.param.getNTypes() + i] = 1;
+        }
+
+        this.negExponentials = new ContinuousOutputModel();
+        integrator.addStepHandler(this.negExponentials);
+        integrator.integrate(
+                system,
+                0,
+                initialState.clone(),
+                -this.param.getTotalProcessLength(),
+                initialState.clone()
+        );
+        integrator.clearStepHandlers();
+
+        this.posExponentials = new ContinuousOutputModel();
+        integrator.addStepHandler(this.posExponentials);
+        integrator.integrate(
+                system,
+                0,
+                initialState.clone(),
+                this.param.getTotalProcessLength(),
+                initialState.clone()
+        );
+        integrator.clearStepHandlers();
     }
 
     @Override
@@ -111,23 +150,15 @@ public class FlowODESystem extends IntervalODESystem {
         double[] values = new double[this.param.getNTypes() * this.param.getNTypes()];
         Utils.fillArray(timeVaryingMatrix, values);
 
-        DenseMatrix A = this.constantMatrix.mul(this.param.getTotalProcessLength() - t).mexp();
-        DenseMatrix B = this.constantMatrix.mul(-this.param.getTotalProcessLength() + t).mexp();
+        this.posExponentials.setInterpolatedTime(this.param.getTotalProcessLength() - t);
+        double[] arrayA = this.posExponentials.getInterpolatedState();
+        RealMatrix A = Utils.toMatrix(arrayA, this.param.getNTypes());
 
-        return Utils.toMatrix(A).multiply(timeVaryingMatrix.add(timeInvariantMatrix).subtract(this.realConstantMatrix)).multiply(Utils.toMatrix(B));
-    }
+        this.negExponentials.setInterpolatedTime(-this.param.getTotalProcessLength() + t);
+        double[] arrayB = this.negExponentials.getInterpolatedState();
+        RealMatrix B = Utils.toMatrix(arrayB, this.param.getNTypes());
 
-    public ContinuousOutputModel[] integrateBackwardsOverIntegrals(double[] state) {
-        double[] v = new double[this.param.getNTypes()*this.param.getNTypes()];
-
-        RealMatrix constantMatrix = new BlockRealMatrix(this.param.getNTypes(), this.param.getNTypes()); //  this.buildTimeInvariantSystemMatrix(this.param.getTotalProcessLength());
-        Utils.fillArray(constantMatrix, v);
-        this.realConstantMatrix = constantMatrix;
-
-        this.constantMatrix = new DenseMatrix(this.param.getNTypes(), this.param.getNTypes());
-        Utils.fillMatrix(this.constantMatrix, v);
-
-        return super.integrateBackwardsOverIntegrals(state);
+        return A.multiply(timeVaryingMatrix.add(timeInvariantMatrix)).multiply(B);
     }
 
     @Override
@@ -174,7 +205,7 @@ public class FlowODESystem extends IntervalODESystem {
 
         for (int i = 0; i < this.param.getNTypes(); i++) {
             for (int j = 0; j < this.param.getNTypes(); j++) {
-                state[i*this.param.getNTypes() + j] *= (1 - this.param.getRhoValues()[newInterval][i]);
+                state[i * this.param.getNTypes() + j] *= (1 - this.param.getRhoValues()[newInterval][i]);
             }
         }
     }
