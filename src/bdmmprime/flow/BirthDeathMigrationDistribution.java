@@ -11,7 +11,6 @@ import beast.base.evolution.tree.TreeInterface;
 import beast.base.inference.parameter.RealParameter;
 import org.apache.commons.math.special.Gamma;
 import org.apache.commons.math3.linear.SingularMatrixException;
-import org.apache.commons.math3.ode.ContinuousOutputModel;
 
 import java.util.Arrays;
 
@@ -249,7 +248,7 @@ public class BirthDeathMigrationDistribution extends SpeciesTreeDistribution {
         return new Flow(
                 system.integrateBackwardsOverIntegrals(initialState),
                 this.parameterization.getNTypes(),
-                system.negExponentials,
+                system.jblasConstantMatrix,
                 this.parameterization.getTotalProcessLength()
         );
     }

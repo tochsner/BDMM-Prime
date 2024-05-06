@@ -2,10 +2,12 @@ package bdmmprime.flow;
 
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.ode.ContinuousOutputModel;
+import org.jblas.DoubleMatrix;
+import org.jblas.MatrixFunctions;
 
 public class Flow {
     ContinuousOutputModel[] outputModels;
-    ContinuousOutputModel posExponentials;
+    DoubleMatrix constantMatrix;
     int n;
     double totalTime;
 
@@ -14,9 +16,9 @@ public class Flow {
         this.n = n;
     }
 
-    public Flow(ContinuousOutputModel[] outputModels, int n, ContinuousOutputModel posExponentials, double totalTime) {
+    public Flow(ContinuousOutputModel[] outputModels, int n, DoubleMatrix constantMatrix, double totalTime) {
         this(outputModels, n);
-        this.posExponentials = posExponentials;
+        this.constantMatrix = constantMatrix;
         this.totalTime = totalTime;
     }
 
@@ -25,11 +27,9 @@ public class Flow {
         double[] flow = outputModels[intervalIndex].getInterpolatedState();
         RealMatrix flowMatrix = Utils.toMatrix(flow, n);
 
-        if (this.posExponentials == null) return flowMatrix;
+        if (this.constantMatrix == null) return flowMatrix;
 
-        posExponentials.setInterpolatedTime(time - totalTime);
-        double[] exp = posExponentials.getInterpolatedState();
-        RealMatrix expMatrix = Utils.toMatrix(exp, n);
+        RealMatrix expMatrix = Utils.toMatrix(MatrixFunctions.expm(this.constantMatrix.mul(time - this.totalTime)));
 
         return expMatrix.multiply(flowMatrix);
     }

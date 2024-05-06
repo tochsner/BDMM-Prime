@@ -5,6 +5,7 @@ import cern.colt.matrix.impl.RCDoubleMatrix2D;
 import org.apache.commons.math3.exception.DimensionMismatchException;
 import org.apache.commons.math3.exception.MaxCountExceededException;
 import org.apache.commons.math3.linear.RealMatrix;
+import org.apache.commons.math3.ode.nonstiff.DormandPrince54Integrator;
 
 
 public class ExponentialODESystem extends IntervalODESystem {

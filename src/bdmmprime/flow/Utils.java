@@ -4,6 +4,7 @@ import org.apache.commons.math3.linear.ArrayRealVector;
 import org.apache.commons.math3.linear.BlockRealMatrix;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.linear.RealVector;
+import org.jblas.DoubleMatrix;
 
 import java.util.Arrays;
 
@@ -16,6 +17,26 @@ public class Utils  {
             }
         }
         return matrix;
+    }
+
+    public static DoubleMatrix toMatrix(RealMatrix source) {
+        DoubleMatrix destination = new DoubleMatrix(source.getRowDimension(), source.getColumnDimension());
+        for (int i = 0; i < source.getRowDimension(); i++) {
+            for (int j = 0; j < source.getColumnDimension(); j++) {
+                destination.put(i, j, source.getEntry(i, j));
+            }
+        }
+        return destination;
+    }
+
+    public static RealMatrix toMatrix(DoubleMatrix source) {
+        RealMatrix destination = new BlockRealMatrix(source.rows, source.columns);
+        for (int i = 0; i < source.rows; i++) {
+            for (int j = 0; j < source.columns; j++) {
+                destination.setEntry(i, j, source.get(i, j));
+            }
+        }
+        return destination;
     }
 
     public static void fillArray(RealMatrix matrix, double[] array) {
