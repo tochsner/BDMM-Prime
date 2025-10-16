@@ -420,4 +420,70 @@ public class TypeMappedTreeTest {
 
         assertEquals(logProbTrue, logProb, 1e-4); // result from BEAST, not checked in R
     }
+
+    @Test
+    public void testBackwardIntegrationWithCloseTips() {
+
+        Tree tree = new TreeParser(
+                "((3[&type=0] : 2, 4[&type=1] : 0.5) : 1 , (1[&type=1] : 2, 2[&type=0] : 1.9999999996001) : 3);",
+                false);
+
+        Parameterization parameterization = new EpiParameterization();
+        parameterization.initByName(
+                "processLength", new RealParameter("5.0"),
+                "typeSet", new TypeSet(2),
+                "R0", new SkylineVectorParameter(
+                        null,
+                        new RealParameter((4.0 / 3.0) + " " + 5.0)),
+                "becomeUninfectiousRate", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("1.5 1.25")),
+                "samplingProportion", new SkylineVectorParameter(
+                        null,
+                        new RealParameter((1.0 / 3.0) + " " + (1.0/2.0))),
+                "migrationRate", new SkylineMatrixParameter(
+                        null,
+                        new RealParameter("0.2 0.1")),
+
+                "removalProb", new SkylineVectorParameter(
+                        null,
+                        new RealParameter("1.0"), 2));
+
+        RealParameter frequencies = new RealParameter("0.5 0.5");
+
+        // Compute density using regular BDMM phylodynamic likelihood
+
+        BirthDeathMigrationDistribution density = new BirthDeathMigrationDistribution();
+        density.initByName("parameterization", parameterization,
+                "frequencies", frequencies,
+                "conditionOnSurvival", false,
+                "tree", tree,
+                "typeLabel", "type",
+                "parallelize", false);
+
+        double logProbTrue = density.calculateLogP();
+
+        TypeMappedTree typeMappedTree = new TypeMappedTree();
+        typeMappedTree.initByName(
+                "parameterization", parameterization,
+                "frequencies", frequencies,
+                "untypedTree", tree,
+                "typeLabel", "type");
+
+        // Compute density using result of backwards integration method
+
+        double[] y = typeMappedTree.backwardsIntegrateSubtree(tree.getRoot(), 0.0);
+        double logScaleFactor = typeMappedTree.geScaleFactors[tree.getRoot().getNr()];
+
+        double logProb = 0.0;
+        for (int type=0; type<parameterization.getNTypes(); type++) {
+            logProb += y[type+parameterization.getNTypes()]*Math.exp(logScaleFactor)*frequencies.getValue(type);
+        }
+
+        logProb = Math.log(logProb)
+                + Math.log(2)*(tree.getInternalNodeCount()-tree.getDirectAncestorNodeCount())
+                - Gamma.logGamma(tree.getLeafNodeCount()+1);
+
+        assertEquals(logProbTrue, logProb, 1e-5);
+    }
 }
